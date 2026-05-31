@@ -57,8 +57,9 @@ All file I/O stays on your machine. Nothing is sent to any server.
 ## Running Locally
 
 ```bash
-npm install
-npm start          # serves docs/ with the required COOP/COEP headers
+git clone https://github.com/tejaswigowda/ffmpeg.wasm.editor.
+cd ffmpeg.wasm.editor
+node server.js          # serves docs/ with the required COOP/COEP headers
 ```
 
 The server sets `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`, which are required for `SharedArrayBuffer` (used by ffmpeg.wasm).
