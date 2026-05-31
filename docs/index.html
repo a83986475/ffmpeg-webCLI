@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Editor — ffmpeg.wasm</title>
+  <style>
+    :root {
+      --bg: #0d0f1a;
+      --surface: #151827;
+      --surface2: #1e2236;
+      --surface3: #252a42;
+      --accent: #6366f1;
+      --accent-h: #818cf8;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --warn: #f59e0b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --border: #2a2f4a;
+      --r: 10px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── Header ── */
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 10px; }
+    header h1 { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.02em; }
+    .pill { font-size: 0.7rem; padding: 2px 9px; border-radius: 20px; background: rgba(99,102,241,.18); color: var(--accent); font-weight: 600; }
+
+    /* ── Layout ── */
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px 24px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+
+    /* ── Cards ── */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+    .card + .card { margin-top: 16px; }
+    .card-header { padding: 11px 16px; border-bottom: 1px solid var(--border); font-size: 0.75rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; display: flex; align-items: center; justify-content: space-between; }
+    .card-body { padding: 16px; }
+
+    /* ── Buttons ── */
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border-radius: 7px; border: none; cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: background .15s, opacity .15s; white-space: nowrap; }
+    .btn:disabled { opacity: .35; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-h); }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-success:hover:not(:disabled) { background: #16a34a; }
+    .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-ghost:hover:not(:disabled) { background: var(--surface3); }
+    .btn-sm { padding: 5px 12px; font-size: 0.78rem; }
+    .btn-block { width: 100%; justify-content: center; }
+
+    /* ── Status bar ── */
+    .statusbar { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 11px 16px; display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); flex-shrink: 0; transition: background .3s; }
+    .dot.loaded { background: var(--success); }
+    .dot.loading { background: var(--warn); animation: blink 1s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+    #statusText { font-size: 0.82rem; color: var(--muted); }
+    .ml-auto { margin-left: auto; }
+
+    /* ── Upload zone ── */
+    .drop-zone { border: 2px dashed var(--border); border-radius: var(--r); padding: 36px 20px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; background: var(--surface2); }
+    .drop-zone:hover, .drop-zone.over { border-color: var(--accent); background: rgba(99,102,241,.07); }
+    .drop-zone svg { width: 36px; height: 36px; color: var(--muted); margin-bottom: 10px; }
+    .drop-zone p { font-size: 0.83rem; color: var(--muted); }
+    .drop-zone strong { color: var(--accent); }
+    #fileInput { display: none; }
+
+    /* ── Video ── */
+    video, audio { width: 100%; border-radius: 7px; background: #000; display: block; }
+    .file-meta { font-size: 0.78rem; color: var(--muted); margin-top: 8px; display: flex; justify-content: space-between; align-items: center; }
+
+    /* ── Trim timeline ── */
+    .trim-row { display: flex; gap: 12px; margin-top: 10px; }
+    .trim-col { flex: 1; }
+    .trim-col label { font-size: 0.75rem; color: var(--muted); display: block; margin-bottom: 4px; }
+    input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+    .time-val { font-size: 0.78rem; color: var(--text); text-align: center; margin-top: 2px; }
+    .timeline { position: relative; height: 32px; background: var(--surface2); border-radius: 5px; margin: 10px 0 6px; overflow: hidden; }
+    .tl-fill { position: absolute; height: 100%; background: rgba(99,102,241,.3); border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); transition: left .05s, width .05s; }
+    .tl-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--muted); }
+
+    /* ── Op picker ── */
+    .ops-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+    .op-tile { background: var(--surface2); border: 2px solid var(--border); border-radius: 8px; padding: 9px 10px; cursor: pointer; text-align: center; font-size: 0.8rem; font-weight: 600; color: var(--muted); transition: all .15s; }
+    .op-tile:hover { border-color: var(--accent); color: var(--accent); }
+    .op-tile.active { border-color: var(--accent); background: rgba(99,102,241,.12); color: var(--accent); }
+
+    /* ── Op panels ── */
+    .op-panel { background: var(--surface2); border-radius: 8px; padding: 13px; margin-bottom: 14px; }
+    .op-panel h4 { font-size: 0.75rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+    .form-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+    .form-group { flex: 1; min-width: 110px; }
+    label.lbl { font-size: 0.78rem; color: var(--muted); display: block; margin-bottom: 4px; }
+    input[type="number"], input[type="text"], select {
+      width: 100%; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); padding: 7px 10px; font-size: 0.83rem; outline: none;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+    .hint { font-size: 0.72rem; color: var(--muted); margin-top: 6px; }
+
+    /* ── Progress ── */
+    .progress-wrap { margin: 12px 0; }
+    .progress-header { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--muted); margin-bottom: 5px; }
+    .progress-track { height: 5px; background: var(--surface3); border-radius: 3px; overflow: hidden; }
+    .progress-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .2s ease; width: 0%; }
+
+    /* ── Log ── */
+    .log { font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace; font-size: 0.73rem; background: #080a10; color: #7dd3fc; padding: 12px; height: 130px; overflow-y: auto; line-height: 1.55; border-radius: 0 0 var(--r) var(--r); }
+    .log-line { word-break: break-all; }
+    .log-line.err { color: #fca5a5; }
+    .log-line.ok  { color: #86efac; }
+
+    /* ── Output ── */
+    .out-empty { text-align: center; padding: 28px; font-size: 0.83rem; color: var(--muted); }
+    .out-actions { display: flex; gap: 10px; margin-top: 12px; align-items: center; flex-wrap: wrap; }
+    .out-size { font-size: 0.78rem; color: var(--muted); }
+
+    .hidden { display: none !important; }
+    .tag { font-size: 0.7rem; font-weight: 600; padding: 1px 7px; border-radius: 4px; background: rgba(99,102,241,.18); color: var(--accent); margin-left: 6px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M15 10l4.553-2.069A1 1 0 0121 8.871v6.258a1 1 0 01-1.447.894L15 14"/>
+    <rect x="2" y="6" width="13" height="12" rx="2"/>
+  </svg>
+  <h1>Video Editor</h1>
+  <span class="pill">ffmpeg.wasm</span>
+</header>
+
+<div class="container">
+
+  <!-- Status -->
+  <div class="statusbar">
+    <div class="dot" id="statusDot"></div>
+    <span id="statusText">ffmpeg not loaded — click "Load ffmpeg" to begin</span>
+    <button class="btn btn-primary ml-auto" id="loadBtn" onclick="loadFFmpeg()">▶ Load ffmpeg (~31 MB)</button>
+  </div>
+
+  <div class="grid">
+
+    <!-- ── Left: Input + Trim ── -->
+    <div>
+      <div class="card">
+        <div class="card-header">Input Video</div>
+        <div class="card-body">
+          <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+            <p><strong>Click to upload</strong> or drag & drop</p>
+            <p style="margin-top:5px;font-size:.72rem">MP4, WebM, MOV, AVI, MKV, GIF…</p>
+          </div>
+          <input type="file" id="fileInput" accept="video/*,image/gif" onchange="handleFile(this.files[0])">
+          <div id="inputWrap" class="hidden" style="margin-top:12px">
+            <video id="inputVideo" controls></video>
+            <div class="file-meta">
+              <span id="inputMeta"></span>
+              <button class="btn btn-ghost btn-sm" onclick="clearInput()">✕ Remove</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Trim -->
+      <div class="card">
+        <div class="card-header">
+          Trim <span class="tag">applied to all operations</span>
+        </div>
+        <div class="card-body">
+          <p class="hint" style="margin-bottom:8px">Drag the handles to set start and end. Leave untouched to keep the full video.</p>
+          <div class="trim-row">
+            <div class="trim-col">
+              <label>Start</label>
+              <input type="range" id="trimStart" min="0" max="100" step="0.1" value="0" oninput="updateTrim()">
+              <div class="time-val" id="startVal">0:00.0</div>
+            </div>
+            <div class="trim-col">
+              <label>End</label>
+              <input type="range" id="trimEnd" min="0" max="100" step="0.1" value="100" oninput="updateTrim()">
+              <div class="time-val" id="endVal">0:00.0</div>
+            </div>
+          </div>
+          <div class="timeline"><div class="tl-fill" id="tlFill"></div></div>
+          <div class="tl-labels">
+            <span>0:00</span>
+            <span id="trimDur">Full duration</span>
+            <span id="vidDur">--:--</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Right: Operations + Output ── -->
+    <div>
+      <div class="card">
+        <div class="card-header">Operation</div>
+        <div class="card-body">
+
+          <!-- Op tiles -->
+          <div class="ops-grid">
+            <button class="op-tile active" id="op-convert" onclick="setOp('convert')">🔄 Convert</button>
+            <button class="op-tile" id="op-resize"  onclick="setOp('resize')">📐 Resize</button>
+            <button class="op-tile" id="op-audio"   onclick="setOp('audio')">🎵 Extract Audio</button>
+            <button class="op-tile" id="op-mute"    onclick="setOp('mute')">🔇 Mute</button>
+            <button class="op-tile" id="op-gif"     onclick="setOp('gif')">🎞 To GIF</button>
+            <button class="op-tile" id="op-speed"   onclick="setOp('speed')">⚡ Speed</button>
+          </div>
+
+          <!-- Convert -->
+          <div class="op-panel" id="panel-convert">
+            <h4>Convert to format</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="lbl">Output Format</label>
+                <select id="convertFmt">
+                  <option value="mp4">MP4 (H.264 + AAC)</option>
+                  <option value="webm">WebM (VP9 + Opus)</option>
+                  <option value="mkv">MKV (H.264 + AAC)</option>
+                  <option value="mov">MOV (H.264 + AAC)</option>
+                  <option value="avi">AVI</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Resize -->
+          <div class="op-panel hidden" id="panel-resize">
+            <h4>Resize video</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="lbl">Width (px)</label>
+                <input type="number" id="resW" placeholder="e.g. 1280">
+              </div>
+              <div class="form-group">
+                <label class="lbl">Height (px)</label>
+                <input type="number" id="resH" placeholder="e.g. 720">
+              </div>
+            </div>
+            <p class="hint">Use -1 for a dimension to preserve aspect ratio (e.g. Width: 1280, Height: -1)</p>
+          </div>
+
+          <!-- Audio -->
+          <div class="op-panel hidden" id="panel-audio">
+            <h4>Extract audio track</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="lbl">Audio Format</label>
+                <select id="audioFmt">
+                  <option value="mp3">MP3</option>
+                  <option value="aac">AAC</option>
+                  <option value="wav">WAV (uncompressed)</option>
+                  <option value="ogg">OGG Vorbis</option>
+                  <option value="flac">FLAC (lossless)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mute -->
+          <div class="op-panel hidden" id="panel-mute">
+            <h4>Remove audio track</h4>
+            <p class="hint" style="font-size:.82rem;color:var(--text)">Output will be the same video with the audio stream stripped.</p>
+          </div>
+
+          <!-- GIF -->
+          <div class="op-panel hidden" id="panel-gif">
+            <h4>Animated GIF</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="lbl">FPS</label>
+                <input type="number" id="gifFps" value="10" min="1" max="30">
+              </div>
+              <div class="form-group">
+                <label class="lbl">Width (px)</label>
+                <input type="number" id="gifW" value="480" min="64">
+              </div>
+            </div>
+            <p class="hint">Height is calculated automatically to preserve aspect ratio.</p>
+          </div>
+
+          <!-- Speed -->
+          <div class="op-panel hidden" id="panel-speed">
+            <h4>Playback speed</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="lbl">Multiplier</label>
+                <select id="speedVal">
+                  <option value="0.25">0.25× — slow motion</option>
+                  <option value="0.5">0.5×</option>
+                  <option value="0.75">0.75×</option>
+                  <option value="1.5">1.5×</option>
+                  <option value="2" selected>2×</option>
+                  <option value="4">4×</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Progress -->
+          <div class="progress-wrap hidden" id="progWrap">
+            <div class="progress-header"><span>Processing…</span><span id="progPct">0%</span></div>
+            <div class="progress-track"><div class="progress-fill" id="progFill"></div></div>
+          </div>
+
+          <button class="btn btn-primary btn-block" id="processBtn" disabled onclick="runProcess()" style="margin-top:6px">
+            ⚙ Process Video
+          </button>
+        </div>
+      </div>
+
+      <!-- Output -->
+      <div class="card">
+        <div class="card-header">Output</div>
+        <div class="card-body">
+          <div class="out-empty" id="outEmpty">Process a video to see the result here</div>
+          <div id="outContent" class="hidden">
+            <video id="outVideo" controls></video>
+            <div id="outAudioWrap" class="hidden">
+              <audio id="outAudio" controls style="width:100%;margin-top:8px;border-radius:7px"></audio>
+            </div>
+            <div class="out-actions">
+              <button class="btn btn-success" id="dlBtn" onclick="download()">⬇ Download</button>
+              <span class="out-size" id="outMeta"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-header">
+      FFmpeg Log
+      <button class="btn btn-ghost btn-sm" onclick="clearLog()">Clear</button>
+    </div>
+    <div class="log" id="log"><div class="log-line ok">Ready. Load ffmpeg to begin.</div></div>
+  </div>
+
+</div><!-- /container -->
+
+<script type="module">
+import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js';
+import { fetchFile } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js';
+
+// Debug: trace every URL.createObjectURL call so we can identify which line
+// triggers a blob URL that later causes ERR_REQUEST_RANGE_NOT_SATISFIABLE.
+// Check the browser console for '[page] createObjectURL' entries with stack traces.
+{
+  const _orig = URL.createObjectURL.bind(URL);
+  URL.createObjectURL = (obj) => {
+    const url = _orig(obj);
+    console.trace('[page] URL.createObjectURL →', url,
+      obj instanceof Blob ? 'Blob size=' + obj.size : obj);
+    return url;
+  };
+}
+
+// ── Helpers ─────────────────────────────────────────
+/** Converts a Blob/File to a data: URL via FileReader — no blob: URL created. */
+function blobToDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload  = () => resolve(/** @type {string} */ (r.result));
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+// ── State ────────────────────────────────────────────
+const ffmpeg = new FFmpeg();
+let inputFile = null;
+let inputExt  = '';
+let vidDur    = 0;
+let currentOp = 'convert';
+let outBlob   = null;
+let outExt    = 'mp4';
+
+// ── Expose to inline handlers ─────────────────────────
+Object.assign(window, {
+  loadFFmpeg, handleFile, clearInput, setOp,
+  updateTrim, runProcess, download, clearLog
+});
+
+// ── Drag & drop ──────────────────────────────────────
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('over');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+
+// ── Load ffmpeg ───────────────────────────────────────
+async function loadFFmpeg() {
+  const btn  = document.getElementById('loadBtn');
+  const dot  = document.getElementById('statusDot');
+  const txt  = document.getElementById('statusText');
+  dot.className = 'dot loading';
+  txt.textContent = 'Downloading ffmpeg-core (~31 MB)…';
+  btn.disabled = true;
+
+  ffmpeg.on('log', ({ message }) => addLog(message));
+  ffmpeg.on('progress', ({ progress }) => {
+    const pct = Math.min(100, Math.round(progress * 100));
+    document.getElementById('progFill').style.width = pct + '%';
+    document.getElementById('progPct').textContent = pct + '%';
+  });
+
+  const esmBase  = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/';
+  // dist/esm is required: the worker loads the core via dynamic import() which
+  // needs a real ES module (export default). The dist/umd build has no exports,
+  // so import() returns an empty namespace and module.default is undefined.
+  const coreBase = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm';
+  try {
+    // docs/worker.js is a same-origin proxy that imports the CDN worker module.
+    // Browsers block cross-origin type:module workers even with CORS headers, and
+    // blob URL workers cause ERR_REQUEST_RANGE_NOT_SATISFIABLE on internal fetches.
+    // A same-origin file avoids both issues: no blob URL, no CORS restriction.
+    // import.meta.url inside the CDN module resolves to CDN, so all its relative
+    // imports resolve correctly.
+    const classWorkerURL = new URL('./worker.js', location.href).href;
+    addLog('Using same-origin worker proxy (./worker.js).', 'ok');
+
+    // coreURL must be a direct CDN URL (NOT a blob URL).
+    // The ESM ffmpeg-core.js has internal relative imports; when loaded from a
+    // blob URL those imports have no base to resolve against → memory errors.
+    // Passing the CDN URL directly lets import() resolve them from the CDN base.
+    const coreURL = `${coreBase}/ffmpeg-core.js`;
+    addLog('Using direct CDN URL for ffmpeg-core.js.', 'ok');
+
+    // wasmURL: direct CDN URL. jsDelivr serves .wasm with Content-Type:
+    // application/wasm + CORS headers, so WebAssembly.instantiateStreaming
+    // works without a blob wrapper. Blob URLs don't support Range requests
+    // (needed internally by the streaming compiler → ERR_REQUEST_RANGE_NOT_SATISFIABLE).
+    const wasmURL = `${coreBase}/ffmpeg-core.wasm`;
+    addLog('Using direct CDN URL for ffmpeg-core.wasm.', 'ok');
+
+    txt.textContent = 'Initialising ffmpeg (downloading WASM ~31 MB)…';
+    await ffmpeg.load({ classWorkerURL, coreURL, wasmURL });
+
+    dot.className = 'dot loaded';
+    txt.textContent = 'ffmpeg loaded and ready';
+    btn.textContent = '✓ Loaded';
+    btn.className = 'btn btn-success ml-auto';
+    btn.disabled = true;
+    addLog('ffmpeg loaded.', 'ok');
+    syncProcessBtn();
+  } catch (err) {
+    // ffmpeg.wasm rejects with a plain string, not an Error — guard accordingly
+    const msg = (err instanceof Error ? err.message : String(err)) || 'unknown error';
+    console.error('FFmpeg load error:', err);
+    dot.className = 'dot';
+    txt.textContent = 'Load failed: ' + msg;
+    btn.disabled = false;
+    addLog('Load error: ' + msg, 'err');
+  }
+}
+
+// ── File handling ─────────────────────────────────────
+async function handleFile(file) {
+  if (!file) return;
+  inputFile = file;
+  inputExt  = file.name.split('.').pop().toLowerCase() || 'mp4';
+
+  const vid = document.getElementById('inputVideo');
+  // Use a data: URL instead of blob: URL — avoids ERR_REQUEST_RANGE_NOT_SATISFIABLE.
+  // Skip inline preview for files > 200 MB to avoid excessive memory use.
+  if (file.size <= 200 * 1024 * 1024) {
+    vid.src = await blobToDataURL(file);
+  } else {
+    vid.src = '';
+    addLog(`Preview skipped for large file (${fmtBytes(file.size)}); processing will still work.`, 'ok');
+  }
+  vid.onloadedmetadata = () => {
+    vidDur = vid.duration;
+    const s = document.getElementById('trimStart');
+    const e = document.getElementById('trimEnd');
+    const step = Math.max(0.1, vidDur / 2000);
+    [s, e].forEach(r => { r.max = vidDur; r.step = step; });
+    e.value = vidDur;
+    document.getElementById('vidDur').textContent = fmtTime(vidDur);
+    document.getElementById('endVal').textContent  = fmtTime(vidDur);
+    updateTrim();
+  };
+  document.getElementById('inputWrap').classList.remove('hidden');
+  document.getElementById('dropZone').classList.add('hidden');
+  document.getElementById('inputMeta').textContent = `${file.name}  ·  ${fmtBytes(file.size)}`;
+  syncProcessBtn();
+  addLog(`File loaded: ${file.name} (${fmtBytes(file.size)})`, 'ok');
+}
+
+function clearInput() {
+  inputFile = null;
+  document.getElementById('inputVideo').src = '';
+  document.getElementById('inputWrap').classList.add('hidden');
+  document.getElementById('dropZone').classList.remove('hidden');
+  syncProcessBtn();
+}
+
+// ── Trim ──────────────────────────────────────────────
+function updateTrim() {
+  const s  = parseFloat(document.getElementById('trimStart').value);
+  const e  = parseFloat(document.getElementById('trimEnd').value);
+  const dur = vidDur || 100;
+
+  if (s >= e) document.getElementById('trimStart').value = Math.max(0, e - 0.1);
+  const ss = parseFloat(document.getElementById('trimStart').value);
+  const ee = parseFloat(document.getElementById('trimEnd').value);
+
+  document.getElementById('startVal').textContent = fmtTime(ss);
+  document.getElementById('endVal').textContent   = fmtTime(ee);
+  document.getElementById('trimDur').textContent  = 'Selection: ' + fmtTime(ee - ss);
+
+  const fill = document.getElementById('tlFill');
+  fill.style.left  = (ss / dur * 100) + '%';
+  fill.style.width = ((ee - ss) / dur * 100) + '%';
+}
+
+// ── Op switcher ───────────────────────────────────────
+function setOp(op) {
+  currentOp = op;
+  document.querySelectorAll('.op-tile').forEach(b => b.classList.remove('active'));
+  document.getElementById('op-' + op).classList.add('active');
+  document.querySelectorAll('.op-panel').forEach(p => p.classList.add('hidden'));
+  document.getElementById('panel-' + op).classList.remove('hidden');
+}
+
+// ── Process ───────────────────────────────────────────
+async function runProcess() {
+  if (!inputFile || !isLoaded()) return;
+
+  const btn = document.getElementById('processBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Processing…';
+
+  const pw = document.getElementById('progWrap');
+  pw.classList.remove('hidden');
+  document.getElementById('progFill').style.width = '0%';
+  document.getElementById('progPct').textContent  = '0%';
+
+  const inName = 'input.' + inputExt;
+
+  try {
+    addLog('Writing input file…', 'ok');
+    await ffmpeg.writeFile(inName, await fetchFile(inputFile));
+
+    const trimS   = parseFloat(document.getElementById('trimStart').value);
+    const trimE   = parseFloat(document.getElementById('trimEnd').value);
+    const hasTrim = trimS > 0 || (vidDur > 0 && trimE < vidDur - 0.05);
+
+    const args = [];
+
+    // Fast seek before input
+    if (hasTrim) args.push('-ss', trimS.toFixed(3));
+    args.push('-i', inName);
+    // Duration (relative to seek point)
+    if (hasTrim) args.push('-t', (trimE - trimS).toFixed(3));
+
+    let ext = 'mp4';
+
+    switch (currentOp) {
+      case 'convert': {
+        ext = document.getElementById('convertFmt').value;
+        if (['mp4','mkv','mov'].includes(ext)) {
+          args.push('-c:v','libx264','-preset','fast','-c:a','aac');
+        } else if (ext === 'webm') {
+          args.push('-c:v','libvpx-vp9','-b:v','0','-crf','30','-c:a','libopus');
+        } else {
+          args.push('-c:v','copy','-c:a','copy');
+        }
+        break;
+      }
+      case 'resize': {
+        // Use -2 (not -1) so ffmpeg rounds auto-computed dimension to nearest even —
+        // libx264 requires width and height both divisible by 2.
+        const roundEven = v => { const n = parseInt(v); return isNaN(n) ? '-2' : String(Math.round(n / 2) * 2 || 2); };
+        const wRaw = document.getElementById('resW').value.trim();
+        const hRaw = document.getElementById('resH').value.trim();
+        const w = wRaw ? roundEven(wRaw) : '-2';
+        const h = hRaw ? roundEven(hRaw) : '-2';
+        ext = 'mp4';
+        args.push('-vf', `scale=${w}:${h}`, '-c:v','libx264','-preset','fast','-c:a','aac');
+        break;
+      }
+      case 'audio': {
+        ext = document.getElementById('audioFmt').value;
+        args.push('-vn');
+        if      (ext === 'mp3')  args.push('-c:a','libmp3lame','-q:a','2');
+        else if (ext === 'aac')  args.push('-c:a','aac');
+        else if (ext === 'wav')  args.push('-c:a','pcm_s16le');
+        else if (ext === 'ogg')  args.push('-c:a','libvorbis');
+        else if (ext === 'flac') args.push('-c:a','flac');
+        break;
+      }
+      case 'mute': {
+        ext = 'mp4';
+        args.push('-an','-c:v','libx264','-preset','fast');
+        break;
+      }
+      case 'gif': {
+        const fps = document.getElementById('gifFps').value || 10;
+        const w   = document.getElementById('gifW').value   || 480;
+        ext = 'gif';
+        args.push(
+          '-filter_complex',
+          `[0:v]fps=${fps},scale=${w}:-2:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse`
+        );
+        break;
+      }
+      case 'speed': {
+        const sp = parseFloat(document.getElementById('speedVal').value);
+        ext = 'mp4';
+        // Build atempo chain (valid range 0.5–2.0 per filter)
+        const atempoChain = buildAtempo(sp);
+        args.push(
+          '-vf', `setpts=${(1/sp).toFixed(6)}*PTS`,
+          '-af', atempoChain,
+          '-c:v','libx264','-preset','fast'
+        );
+        break;
+      }
+    }
+
+    outExt = ext;
+    const outName = 'output.' + ext;
+    args.push(outName);
+
+    addLog('ffmpeg ' + args.join(' '), 'ok');
+    await ffmpeg.exec(args);
+    addLog('Done!', 'ok');
+
+    const data = await ffmpeg.readFile(outName);
+    outBlob = new Blob([data.buffer], { type: mime(ext) });
+    // Use a data: URL — no blob: URL means no range-request failures.
+    const url = await blobToDataURL(outBlob);
+
+    const audioExts = ['mp3','aac','wav','ogg','flac'];
+    const ov = document.getElementById('outVideo');
+    const oa = document.getElementById('outAudio');
+    const oaw = document.getElementById('outAudioWrap');
+
+    document.getElementById('outEmpty').classList.add('hidden');
+    document.getElementById('outContent').classList.remove('hidden');
+
+    if (audioExts.includes(ext)) {
+      ov.classList.add('hidden');
+      oaw.classList.remove('hidden');
+      oa.src = url;
+    } else {
+      ov.classList.remove('hidden');
+      oaw.classList.add('hidden');
+      ov.src = url;
+    }
+
+    document.getElementById('outMeta').textContent = `${fmtBytes(data.buffer.byteLength)} · ${ext.toUpperCase()}`;
+    document.getElementById('dlBtn').textContent = `⬇ Download output.${ext}`;
+
+    // Clean up virtual FS
+    await ffmpeg.deleteFile(inName).catch(() => {});
+    await ffmpeg.deleteFile(outName).catch(() => {});
+
+  } catch (err) {
+    addLog('Error: ' + err.message, 'err');
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⚙ Process Video';
+  }
+}
+
+// ── Download ──────────────────────────────────────────
+async function download() {
+  if (!outBlob) return;
+  const a = document.createElement('a');
+  a.href = await blobToDataURL(outBlob);
+  a.download = 'output.' + outExt;
+  a.click();
+}
+
+// ── Helpers ───────────────────────────────────────────
+function buildAtempo(sp) {
+  // atempo accepts 0.5–2.0; chain filters for out-of-range speeds
+  if (sp >= 0.5 && sp <= 2.0) return `atempo=${sp}`;
+  if (sp > 2.0) {
+    const stages = [];
+    let rem = sp;
+    while (rem > 2.0) { stages.push('atempo=2.0'); rem /= 2.0; }
+    stages.push(`atempo=${rem.toFixed(4)}`);
+    return stages.join(',');
+  }
+  // sp < 0.5
+  const stages = [];
+  let rem = sp;
+  while (rem < 0.5) { stages.push('atempo=0.5'); rem /= 0.5; }
+  stages.push(`atempo=${rem.toFixed(4)}`);
+  return stages.join(',');
+}
+
+function isLoaded() {
+  return document.getElementById('statusDot').classList.contains('loaded');
+}
+
+function syncProcessBtn() {
+  document.getElementById('processBtn').disabled = !(isLoaded() && inputFile);
+}
+
+function addLog(msg, type = '') {
+  const log  = document.getElementById('log');
+  const line = document.createElement('div');
+  line.className = 'log-line' + (type ? ' ' + type : '');
+  line.textContent = msg;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById('log').innerHTML = '';
+}
+
+function fmtTime(s) {
+  if (!isFinite(s) || s < 0) return '0:00.0';
+  const m   = Math.floor(s / 60);
+  const sec = (s % 60).toFixed(1);
+  return `${m}:${String(sec).padStart(4, '0')}`;
+}
+
+function fmtBytes(b) {
+  if (b < 1024)        return b + ' B';
+  if (b < 1048576)     return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1048576).toFixed(1) + ' MB';
+}
+
+function mime(ext) {
+  return ({
+    mp4:'video/mp4', webm:'video/webm', mkv:'video/x-matroska',
+    mov:'video/quicktime', avi:'video/x-msvideo', gif:'image/gif',
+    mp3:'audio/mpeg', aac:'audio/aac', wav:'audio/wav',
+    ogg:'audio/ogg', flac:'audio/flac',
+  })[ext] || 'application/octet-stream';
+}
+
+// Init trim display
+updateTrim();
+</script>
+</body>
+</html>
