@@ -4,20 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Video Editor -- ffmpeg.wasm</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
   <style>
     :root {
       --bg: #0d0f1a;
       --surface: #151827;
       --surface2: #1e2236;
       --surface3: #252a42;
-      --accent: #6366f1;
+      --accent: #5f7fe8;
       --accent-h: #818cf8;
       --success: #22c55e;
       --danger: #ef4444;
       --warn: #f59e0b;
       --text: #e2e8f0;
       --muted: #94a3b8;
-      --border: #2a2f4a;
+      --border: #362720;
       --r: 10px;
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -87,10 +88,12 @@
     .tl-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--muted); }
 
     /* ── Op picker ── */
-    .ops-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+    .ops-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
     .op-tile { background: var(--surface2); border: 2px solid var(--border); border-radius: 8px; padding: 9px 10px; cursor: pointer; text-align: center; font-size: 0.8rem; font-weight: 600; color: var(--muted); transition: all .15s; }
     .op-tile:hover { border-color: var(--accent); color: var(--accent); }
     .op-tile.active { border-color: var(--accent); background: rgba(99,102,241,.12); color: var(--accent); }
+    .op-tile i { display: block;     font-size: 30px;
+    margin-bottom: 12px; }
 
     /* ── Op panels ── */
     .op-panel { background: var(--surface2); border-radius: 8px; padding: 13px; margin-bottom: 14px; }
@@ -217,7 +220,7 @@
   <div class="statusbar">
     <div class="dot" id="statusDot"></div>
     <span id="statusText">ffmpeg not loaded — click "Load ffmpeg" to begin</span>
-    <button class="btn btn-primary ml-auto" id="loadBtn" onclick="loadFFmpeg()">▶ Load ffmpeg (~31 MB)</button>
+    <button class="btn btn-primary ml-auto" id="loadBtn" onclick="loadFFmpeg()"><i class="fas fa-play"></i> Load ffmpeg (~31 MB)</button>
   </div>
 
   <div class="grid">
@@ -239,7 +242,7 @@
             <video id="inputVideo" controls></video>
             <div class="file-meta">
               <span id="inputMeta"></span>
-              <button class="btn btn-ghost btn-sm" onclick="clearInput()">✕ Remove</button>
+              <button class="btn btn-ghost btn-sm" onclick="clearInput()"><i class="fas fa-xmark"></i> Remove</button>
             </div>
           </div>
         </div>
@@ -277,34 +280,34 @@
     <!-- ── Right: Operations + Output ── -->
     <div>
       <div class="card">
-        <div class="card-header">Operation</div>
+        <div class="card-header">Operations</div>
         <div class="card-body">
 
           <!-- Op tiles -->
           <div class="ops-grid">
-            <button class="op-tile active" id="op-convert"       onclick="setOp('convert')">🔄 Convert</button>
-            <button class="op-tile" id="op-resizecompress" onclick="setOp('resizecompress')">📐 Resize &amp; Compress</button>
-            <button class="op-tile" id="op-audio"         onclick="setOp('audio')">🎵 Extract Audio</button>
-            <button class="op-tile" id="op-mute"          onclick="setOp('mute')">🔇 Mute</button>
-            <button class="op-tile" id="op-gif"           onclick="setOp('gif')">🎞 To GIF</button>
-            <button class="op-tile" id="op-speed"         onclick="setOp('speed')">⚡ Speed</button>
-            <button class="op-tile" id="op-rotate"        onclick="setOp('rotate')">🔄 Rotate / Flip</button>
-            <button class="op-tile" id="op-crop"          onclick="setOp('crop')">✂️ Crop</button>
-            <button class="op-tile" id="op-thumbnail"     onclick="setOp('thumbnail')">🖼️ Thumbnail</button>
-            <button class="op-tile" id="op-reverse"       onclick="setOp('reverse')">⏪ Reverse</button>
-            <button class="op-tile" id="op-fade"          onclick="setOp('fade')">🌅 Fade In/Out</button>
-            <button class="op-tile" id="op-adjust"        onclick="setOp('adjust')">🎨 Adjust</button>
-            <button class="op-tile" id="op-stripmeta"     onclick="setOp('stripmeta')">🚫 Strip Metadata</button>
-            <button class="op-tile" id="op-subtitles"     onclick="setOp('subtitles')">📝 Embed Subtitles</button>
-            <button class="op-tile" id="op-volume"        onclick="setOp('volume')">🔊 Volume</button>
-            <button class="op-tile" id="op-loop"          onclick="setOp('loop')">🔁 Loop</button>
-            <button class="op-tile" id="op-overlay"       onclick="setOp('overlay')">🖼️ Logo Overlay</button>
-            <button class="op-tile" id="op-mixaudio"      onclick="setOp('mixaudio')">🎵 Mix Audio</button>
-            <button class="op-tile" id="op-concat"        onclick="setOp('concat')">🔗 Concatenate</button>
-            <button class="op-tile" id="op-sxs"           onclick="setOp('sxs')">&#x21D4; Side by Side</button>
-            <button class="op-tile" id="op-pip"           onclick="setOp('pip')">&#x29C9; Picture in Picture</button>
-            <button class="op-tile" id="op-info"          onclick="setOp('info')">📊 Media Info</button>
-            <button class="op-tile" id="op-raw"           onclick="setOp('raw')">🛠️ Raw FFmpeg</button>
+            <button class="op-tile active" id="op-convert"       onclick="setOp('convert')"><i class="fas fa-arrows-rotate"></i> Convert</button>
+            <button class="op-tile" id="op-resizecompress" onclick="setOp('resizecompress')"><i class="fas fa-compress"></i> Resize &amp; Compress</button>
+            <button class="op-tile" id="op-audio"         onclick="setOp('audio')"><i class="fas fa-music"></i> Extract Audio</button>
+            <button class="op-tile" id="op-mute"          onclick="setOp('mute')"><i class="fas fa-volume-xmark"></i> Mute</button>
+            <button class="op-tile" id="op-gif"           onclick="setOp('gif')"><i class="fas fa-film"></i> To GIF</button>
+            <button class="op-tile" id="op-speed"         onclick="setOp('speed')"><i class="fas fa-bolt"></i> Speed</button>
+            <button class="op-tile" id="op-rotate"        onclick="setOp('rotate')"><i class="fas fa-rotate-right"></i> Rotate / Flip</button>
+            <button class="op-tile" id="op-crop"          onclick="setOp('crop')"><i class="fas fa-crop-simple"></i> Crop</button>
+            <button class="op-tile" id="op-thumbnail"     onclick="setOp('thumbnail')"><i class="fas fa-image"></i> Thumbnail</button>
+            <button class="op-tile" id="op-reverse"       onclick="setOp('reverse')"><i class="fas fa-backward"></i> Reverse</button>
+            <button class="op-tile" id="op-fade"          onclick="setOp('fade')"><i class="fas fa-circle-half-stroke"></i> Fade In/Out</button>
+            <button class="op-tile" id="op-adjust"        onclick="setOp('adjust')"><i class="fas fa-sliders"></i> Adjust</button>
+            <button class="op-tile" id="op-stripmeta"     onclick="setOp('stripmeta')"><i class="fas fa-ban"></i> Strip Metadata</button>
+            <button class="op-tile" id="op-subtitles"     onclick="setOp('subtitles')"><i class="fas fa-closed-captioning"></i> Embed Subtitles</button>
+            <button class="op-tile" id="op-volume"        onclick="setOp('volume')"><i class="fas fa-volume-high"></i> Volume</button>
+            <button class="op-tile" id="op-loop"          onclick="setOp('loop')"><i class="fas fa-repeat"></i> Loop</button>
+            <button class="op-tile" id="op-overlay"       onclick="setOp('overlay')"><i class="fas fa-stamp"></i> Logo Overlay</button>
+            <button class="op-tile" id="op-mixaudio"      onclick="setOp('mixaudio')"><i class="fas fa-headphones"></i> Mix Audio</button>
+            <button class="op-tile" id="op-concat"        onclick="setOp('concat')"><i class="fas fa-link"></i> Concatenate</button>
+            <button class="op-tile" id="op-sxs"           onclick="setOp('sxs')"><i class="fas fa-table-columns"></i> Side by Side</button>
+            <button class="op-tile" id="op-pip"           onclick="setOp('pip')"><i class="fas fa-clone"></i> Picture in Picture</button>
+            <button class="op-tile" id="op-info"          onclick="setOp('info')"><i class="fas fa-circle-info"></i> Media Info</button>
+            <button class="op-tile" id="op-raw"           onclick="setOp('raw')"><i class="fas fa-terminal"></i> Raw FFmpeg</button>
           </div>
 
           <!-- Convert -->
@@ -548,7 +551,7 @@
             <div style="margin-bottom:10px">
               <label class="lbl">Subtitle file <span style="font-weight:400;color:var(--muted)">(SRT, VTT, or ASS)</span></label>
               <div style="display:flex;align-items:center;gap:8px">
-                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('subtitleFileInput').click()">Choose file</button>
+                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('subtitleFileInput').click()"><i class="fas fa-folder-open"></i> Choose file</button>
                 <span id="subtitleFileName" style="font-size:0.78rem;color:var(--muted)">No file chosen</span>
                 <input type="file" id="subtitleFileInput" style="display:none" accept=".srt,.vtt,.ass,.ssa" onchange="onSubtitleFileChange(this)">
               </div>
@@ -596,7 +599,7 @@
             <div style="margin-bottom:10px">
               <label class="lbl">Image file <span style="font-weight:400;color:var(--muted)">(PNG with transparency recommended)</span></label>
               <div style="display:flex;align-items:center;gap:8px">
-                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('overlayFileInput').click()">Choose image</button>
+                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('overlayFileInput').click()"><i class="fas fa-folder-open"></i> Choose image</button>
                 <span id="overlayFileName" style="font-size:0.78rem;color:var(--muted)">No file chosen</span>
                 <input type="file" id="overlayFileInput" style="display:none" accept="image/*,.png,.jpg,.jpeg,.gif,.webp" onchange="onOverlayFileChange(this)">
               </div>
@@ -626,7 +629,7 @@
             <div style="margin-bottom:10px">
               <label class="lbl">Music / audio file</label>
               <div style="display:flex;align-items:center;gap:8px">
-                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('mixAudioFileInput').click()">Choose audio</button>
+                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('mixAudioFileInput').click()"><i class="fas fa-folder-open"></i> Choose audio</button>
                 <span id="mixAudioFileName" style="font-size:0.78rem;color:var(--muted)">No file chosen</span>
                 <input type="file" id="mixAudioFileInput" style="display:none" accept="audio/*,.mp3,.wav,.ogg,.aac,.flac,.m4a" onchange="onMixAudioFileChange(this)">
               </div>
@@ -652,7 +655,7 @@
             <div style="margin-bottom:10px">
               <label class="lbl">Second clip <span style="font-weight:400;color:var(--muted)">(appended after the loaded file)</span></label>
               <div style="display:flex;align-items:center;gap:8px">
-                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('concatFileInput').click()">Choose clip</button>
+                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('concatFileInput').click()"><i class="fas fa-folder-open"></i> Choose clip</button>
                 <span id="concatFileName" style="font-size:0.78rem;color:var(--muted)">No file chosen</span>
                 <input type="file" id="concatFileInput" style="display:none" accept="video/*" onchange="onConcatFileChange(this)">
               </div>
@@ -666,7 +669,7 @@
             <div style="margin-bottom:10px">
               <label class="lbl">Second video</label>
               <div style="display:flex;align-items:center;gap:8px">
-                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('sxsFileInput').click()">Choose video</button>
+                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('sxsFileInput').click()"><i class="fas fa-folder-open"></i> Choose video</button>
                 <span id="sxsFileName" style="font-size:0.78rem;color:var(--muted)">No file chosen</span>
                 <input type="file" id="sxsFileInput" style="display:none" accept="video/*" onchange="onSxsFileChange(this)">
               </div>
@@ -703,7 +706,7 @@
             <div style="margin-bottom:10px">
               <label class="lbl">Overlay video</label>
               <div style="display:flex;align-items:center;gap:8px">
-                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('pipFileInput').click()">Choose video</button>
+                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('pipFileInput').click()"><i class="fas fa-folder-open"></i> Choose video</button>
                 <span id="pipFileName" style="font-size:0.78rem;color:var(--muted)">No file chosen</span>
                 <input type="file" id="pipFileInput" style="display:none" accept="video/*" onchange="onPipFileChange(this)">
               </div>
@@ -748,7 +751,7 @@
 
             <div id="rawInput2Row" style="margin-bottom:8px">
               <div style="display:flex;align-items:center;gap:8px">
-                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('rawInput2').click()">Choose file</button>
+                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('rawInput2').click()"><i class="fas fa-folder-open"></i> Choose file</button>
                 <span id="rawInput2Name" style="font-size:0.78rem;color:var(--muted)">No file chosen</span>
                 <input type="file" id="rawInput2" style="display:none" accept="audio/*,.mp3,.wav,.ogg,.aac,.flac,.m4a,.opus" onchange="onRawInput2Change(this)">
               </div>
@@ -785,7 +788,7 @@
           </div>
 
           <button class="btn btn-primary btn-block" id="processBtn" disabled="true" onclick="runProcess()" style="margin-top:6px">
-            Load ffmpeg & Process Video
+            <i class="fas fa-gear"></i> Process Video
           </button>
         </div>
       </div>
@@ -802,7 +805,7 @@
             </div>
             <img id="outImg" class="hidden" style="max-width:100%;border-radius:7px;margin-top:8px;display:block">
             <div class="out-actions">
-              <button class="btn btn-success" id="dlBtn" onclick="download()">⬇ Download</button>
+              <button class="btn btn-success" id="dlBtn" onclick="download()"><i class="fas fa-download"></i> Download</button>
               <span class="out-size" id="outMeta"></span>
             </div>
           </div>
@@ -815,7 +818,7 @@
   <div class="card" style="margin-top:16px">
     <div class="card-header">
       FFmpeg Log
-      <button class="btn btn-ghost btn-sm" onclick="clearLog()">Clear</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearLog()"><i class="fas fa-broom"></i> Clear</button>
     </div>
     <div class="log" id="log"><div class="log-line ok">Ready. Load ffmpeg to begin.</div></div>
   </div>
@@ -1004,7 +1007,7 @@ async function loadFFmpeg() {
 
     dot.className = 'dot loaded';
     txt.textContent = 'ffmpeg loaded and ready';
-    btn.textContent = '✓ Loaded';
+    btn.innerHTML = '<i class="fas fa-check"></i> Loaded';
     btn.className = 'btn btn-success ml-auto';
     btn.disabled = true;
     addLog('ffmpeg loaded.', 'ok');
@@ -1304,7 +1307,7 @@ async function runProcess() {
 
   const btn = document.getElementById('processBtn');
   btn.disabled = true;
-  btn.textContent = '⏳ Processing…';
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing…';
 
   const pw = document.getElementById('progWrap');
   pw.classList.remove('hidden');
@@ -1633,7 +1636,7 @@ async function runProcess() {
     }
 
     document.getElementById('outMeta').textContent = `${fmtBytes(data.buffer.byteLength)} · ${ext.toUpperCase()}`;
-    document.getElementById('dlBtn').textContent = `⬇ Download output.${ext}`;
+    document.getElementById('dlBtn').innerHTML = `<i class="fas fa-download"></i> Download output.${ext}`;
 
     // Clean up virtual FS
     await ffmpeg.deleteFile(inName).catch(() => {});
@@ -1647,7 +1650,7 @@ async function runProcess() {
     console.error(err);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Process Video';
+    btn.innerHTML = '<i class="fas fa-gear"></i> Process Video';
   }
 }
 
@@ -1687,13 +1690,13 @@ function syncProcessBtn() {
   const btn = document.getElementById('processBtn');
   if (!inputFile) {
     btn.disabled = true;
-    btn.textContent = '⚙ Process Video';
+    btn.innerHTML = '<i class="fas fa-gear"></i> Process Video';
   } else if (!isLoaded()) {
     btn.disabled = false;
-    btn.textContent = '⬇ Load ffmpeg & Process';
+    btn.innerHTML = '<i class="fas fa-download"></i> Load ffmpeg &amp; Process';
   } else {
     btn.disabled = false;
-    btn.textContent = '⚙ Process Video';
+    btn.innerHTML = '<i class="fas fa-gear"></i> Process Video';
   }
 }
 
