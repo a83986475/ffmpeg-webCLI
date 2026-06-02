@@ -295,6 +295,7 @@
             <button class="op-tile" id="op-fade"          onclick="setOp('fade')">🌅 Fade In/Out</button>
             <button class="op-tile" id="op-adjust"        onclick="setOp('adjust')">🎨 Adjust</button>
             <button class="op-tile" id="op-stripmeta"     onclick="setOp('stripmeta')">🚫 Strip Metadata</button>
+            <button class="op-tile" id="op-subtitles"     onclick="setOp('subtitles')">📝 Embed Subtitles</button>
             <button class="op-tile" id="op-raw"           onclick="setOp('raw')">🛠️ Raw FFmpeg</button>
           </div>
 
@@ -533,6 +534,29 @@
             <p class="hint" style="font-size:.82rem;color:var(--text)">Removes all embedded metadata (GPS, camera info, creation date, etc.) from the output file. Video and audio are re-encoded.</p>
           </div>
 
+          <!-- Embed Subtitles -->
+          <div class="op-panel hidden" id="panel-subtitles">
+            <h4>Embed Subtitles</h4>
+            <div style="margin-bottom:10px">
+              <label class="lbl">Subtitle file <span style="font-weight:400;color:var(--muted)">(SRT, VTT, or ASS)</span></label>
+              <div style="display:flex;align-items:center;gap:8px">
+                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('subtitleFileInput').click()">Choose file</button>
+                <span id="subtitleFileName" style="font-size:0.78rem;color:var(--muted)">No file chosen</span>
+                <input type="file" id="subtitleFileInput" style="display:none" accept=".srt,.vtt,.ass,.ssa" onchange="onSubtitleFileChange(this)">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="lbl">Output format</label>
+                <select id="subsFmt">
+                  <option value="mp4">MP4 &mdash; mov_text track</option>
+                  <option value="mkv">MKV &mdash; native subtitle stream</option>
+                </select>
+              </div>
+            </div>
+            <p class="hint" style="margin-top:8px">Subtitles are embedded as a <strong style="color:var(--text)">soft track</strong> — toggleable in any media player. To bake them permanently into the picture a libass-enabled build is required (use Raw FFmpeg with a custom binary).</p>
+          </div>
+
           <!-- Raw / Advanced -->
           <div class="op-panel hidden" id="panel-raw">
             <h4>Raw FFmpeg</h4>
@@ -657,13 +681,22 @@ let outBlob      = null;
 let outExt       = 'mp4';
 let rawInput2File = null;
 let rawInput2Ext  = '';
+let subtitleFile  = null;
+let subtitleExt   = '';
 
 // ── Expose to inline handlers ─────────────────────────
 Object.assign(window, {
   loadFFmpeg, handleFile, clearInput, setOp,
   updateTrim, runProcess, download, clearLog, updateSizeEstimate, updateRawPreview,
-  onRawInput2Change
+  onRawInput2Change, onSubtitleFileChange
 });
+
+function onSubtitleFileChange(input) {
+  if (!input.files.length) return;
+  subtitleFile = input.files[0];
+  subtitleExt  = subtitleFile.name.split('.').pop().toLowerCase();
+  document.getElementById('subtitleFileName').textContent = subtitleFile.name;
+}
 
 function onRawInput2Change(input) {
   if (!input.files.length) return;
@@ -900,7 +933,8 @@ function updateSizeEstimate() {
     case 'reverse':  { estimated = srcSize * (dur / vidDur); break; }
     case 'fade':     { estimated = srcSize * (dur / vidDur); break; }
     case 'adjust':   { estimated = srcSize * (dur / vidDur); break; }
-    case 'stripmeta':{ estimated = srcSize * 0.99; break; }
+    case 'stripmeta':  { estimated = srcSize * 0.99; break; }
+    case 'subtitles':  { wrap.classList.add('hidden'); return; }
     case 'thumbnail':{ wrap.classList.add('hidden'); return; }
     case 'raw':       { wrap.classList.add('hidden'); return; }
     case 'crop': {
@@ -1168,6 +1202,19 @@ async function runProcess() {
       case 'stripmeta': {
         ext = 'mp4';
         args.push('-map_metadata','-1','-c:v','libx264','-preset','fast','-c:a','aac');
+        break;
+      }
+      case 'subtitles': {
+        if (!subtitleFile) throw new Error('Please choose a subtitle file first.');
+        ext = document.getElementById('subsFmt').value;
+        const subsName = 'subs.' + subtitleExt;
+        addLog('Writing subtitle file\u2026', 'ok');
+        await ffmpeg.writeFile(subsName, await fetchFile(subtitleFile));
+        // Reset args — stream-copy video+audio, no trim needed
+        args.length = 0;
+        args.push('-i', inName, '-i', subsName);
+        const subsCodec = ext === 'mkv' ? 'copy' : 'mov_text';
+        args.push('-c:v','copy','-c:a','copy','-c:s', subsCodec,'-map','0','-map','1');
         break;
       }
       case 'raw': {

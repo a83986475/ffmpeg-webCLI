@@ -60,6 +60,13 @@ Fine-tune the look of a clip with the `eq` filter. Three sliders control brightn
 ### 🚫 Strip Metadata
 Remove all embedded metadata -- GPS coordinates, camera make/model, creation timestamps, and any other tags -- before sharing a file. Uses `-map_metadata -1` during re-encoding.
 
+### 📝 Embed Subtitles
+Mux an `.srt`, `.vtt`, or `.ass` subtitle file into the video as a **soft subtitle track** -- toggleable on/off in any media player (VLC, browser, etc.) without re-encoding the picture. Output format choices:
+- **MP4** -- subtitle stream encoded as `mov_text`
+- **MKV** -- subtitle stream copied natively (preserves ASS/SSA styling)
+
+Video and audio are stream-copied (zero quality loss, near-instant). Hard-burning subtitles into the picture requires a libass-enabled ffmpeg build and is not available in the standard WebAssembly core.
+
 ### 🛠 Raw FFmpeg
 Full access to the ffmpeg command line directly in the browser. Type any arguments into the text area; they are inserted after `-i input` and before the output filename. Choose the output file extension and optionally bypass the trim range. A live **full command preview** updates as you type, showing the exact command that will be executed. Quoted values containing spaces are handled correctly.
 
@@ -67,7 +74,7 @@ An **Example Commands** library (collapsible) provides one-click recipes to get 
 
 | Example | What it does |
 |---|---|
-| � Colour-bar watermark | Semi-transparent `drawbox` stamp in the bottom-right corner |
+| 🔲 Colour-bar watermark | Semi-transparent `drawbox` stamp in the bottom-right corner |
 | 🎞 Cap framerate to 24 fps | `fps=24` filter + H.264 re-encode |
 | 🎨 Convert to grayscale | `format=gray` + H.264 re-encode |
 | 🔊 Loudness normalize | `loudnorm` filter, stream-copies video |
@@ -90,7 +97,7 @@ Clicking a recipe fills in the arguments and extension fields instantly.
 ## How It Works
 
 1. Click **Load ffmpeg** -- downloads the ffmpeg-core WebAssembly binary (~31 MB, cached after first load).
-2. Drop or select a video file.
+2. Drop or select a video file. The **Process Video** button activates; if ffmpeg is not yet loaded it reads **Load ffmpeg & Process** and will download it automatically on first click.
 3. Optionally set trim points with the timeline sliders.
 4. Pick an operation and adjust its settings. A **live size estimate** updates as you change parameters.
 5. Click **Process Video** -- ffmpeg runs entirely in a Web Worker inside your browser.
