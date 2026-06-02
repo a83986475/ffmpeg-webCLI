@@ -578,8 +578,8 @@
             <div class="progress-track"><div class="progress-fill" id="progFill"></div></div>
           </div>
 
-          <button class="btn btn-primary btn-block" id="processBtn" disabled onclick="runProcess()" style="margin-top:6px">
-            ⚙ Process Video
+          <button class="btn btn-primary btn-block" id="processBtn" disabled="true" onclick="runProcess()" style="margin-top:6px">
+            Load ffmpeg & Process Video
           </button>
         </div>
       </div>
@@ -1004,7 +1004,12 @@ function updateRawPreview() {
 
 // ── Process ───────────────────────────────────────────
 async function runProcess() {
-  if (!inputFile || !isLoaded()) return;
+  if (!inputFile) return;
+
+  if (!isLoaded()) {
+    await loadFFmpeg();
+    if (!isLoaded()) return; // load failed
+  }
 
   const btn = document.getElementById('processBtn');
   btn.disabled = true;
@@ -1221,7 +1226,7 @@ async function runProcess() {
     console.error(err);
   } finally {
     btn.disabled = false;
-    btn.textContent = '⚙ Process Video';
+    btn.textContent = 'Process Video';
   }
 }
 
@@ -1258,7 +1263,17 @@ function isLoaded() {
 }
 
 function syncProcessBtn() {
-  document.getElementById('processBtn').disabled = !(isLoaded() && inputFile);
+  const btn = document.getElementById('processBtn');
+  if (!inputFile) {
+    btn.disabled = true;
+    btn.textContent = '⚙ Process Video';
+  } else if (!isLoaded()) {
+    btn.disabled = false;
+    btn.textContent = '⬇ Load ffmpeg & Process';
+  } else {
+    btn.disabled = false;
+    btn.textContent = '⚙ Process Video';
+  }
 }
 
 function addLog(msg, type = '') {
