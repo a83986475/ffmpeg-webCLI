@@ -1140,8 +1140,8 @@ let stackSeq  = 0;
 const CHAINABLE = new Set(['crop','resizecompress','rotate','adjust','fade','denoise','sharpenblur','speed','pad','volume']);
 const STACK_ICON = { crop:'fa-crop-simple', resizecompress:'fa-compress', rotate:'fa-rotate-right', adjust:'fa-sliders', fade:'fa-circle-half-stroke', denoise:'fa-broom', sharpenblur:'fa-eye', speed:'fa-bolt', pad:'fa-expand', volume:'fa-volume-high' };
 
-// Operations unsupported in batch mode (multi-input, whole-file, or dimension-dependent)
-const BATCH_UNSUPPORTED = new Set(['crop', 'concat', 'sxs', 'pip', 'mixaudio', 'overlay', 'subtitles', 'reverse', 'loop', 'boomerang', 'info', 'raw']);
+// Operations unsupported in batch mode (multi-input, whole-file special handling, or informational)
+const BATCH_UNSUPPORTED = new Set(['crop', 'concat', 'sxs', 'pip', 'mixaudio', 'overlay', 'subtitles', 'boomerang', 'info', 'raw']);
 
 // ── Batch mode state ─────────────────────────────────
 let batchMode = false;
@@ -2917,6 +2917,29 @@ function buildOperationArgs(args, videoEl, inputExt) {
       } else {
         args.push('-map_metadata','-1','-c:v','libx264','-preset','fast','-c:a','aac');
       }
+      break;
+    }
+    case 'loop': {
+      const loopCount = Math.max(1, parseInt(document.getElementById('loopCount').value) || 3);
+      args.push('-stream_loop', loopCount - 1, '-i', inName, '-c', 'copy');
+      break;
+    }
+    case 'overlay': {
+      // Get overlay image file from input
+      const input2 = document.getElementById('input2File');
+      if (!input2 || !input2.files || input2.files.length === 0) {
+        addLog('  Warning: No overlay image selected. Skipping logo overlay.', 'warn');
+        args.push('-c:v', 'copy', '-c:a', 'copy');
+        break;
+      }
+      const overlayFile = input2.files[0];
+      const overlayExt = overlayFile.name.split('.').pop().toLowerCase();
+      const overlayName = 'overlay_' + Math.random().toString(36).substr(2, 9) + '.' + overlayExt;
+      
+      // Note: This would require writing the overlay file to ffmpeg's virtual filesystem
+      // For now, fall back to copy since overlay needs second input file handling
+      addLog('  Logo overlay in batch mode requires manual per-file configuration. Using stream copy.', 'warn');
+      args.push('-c:v', 'copy', '-c:a', 'copy');
       break;
     }
     default:
