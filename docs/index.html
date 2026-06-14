@@ -1065,20 +1065,16 @@
               <button class="btn btn-success" id="dlBtn" onclick="download()"><i class="fas fa-download"></i> Download</button>
               <span class="out-size" id="outMeta"></span>
             </div>
-          </div>
-          <!-- Batch outputs -->
-          <div id="batchOutputsWrap" class="hidden">
-            <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
-              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                <div style="font-size:0.85rem;font-weight:600;color:var(--muted);">Batch Outputs (<span id="batchCompleteCount">0</span>)</div>
-                <button class="btn btn-sm" id="downloadAllZipBtn" onclick="downloadBatchAllAsZip()" title="Download all as ZIP" style="display:none;"><i class="fas fa-archive"></i> Download All</button>
-              </div>
-              <div id="batchOutputsPreview" style="margin-bottom:12px;padding:8px;background:var(--surface2);border-radius:6px;display:none;">
-                <select id="batchOutputSelect" onchange="selectBatchOutput(this.value)" style="width:100%;padding:6px;border-radius:4px;background:var(--surface3);color:var(--text);border:1px solid var(--border);margin-bottom:8px;">
+            <!-- Batch outputs - shown inline in output section -->
+            <div id="batchOutputsWrap" class="hidden" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+              <div style="font-size:0.85rem;font-weight:600;color:var(--muted);margin-bottom:12px;">Batch Outputs (<span id="batchCompleteCount">0</span>)</div>
+              <div style="display:flex;gap:8px;margin-bottom:12px;">
+                <select id="batchOutputSelect" onchange="selectBatchOutput(this.value)" style="flex:1;padding:8px;border-radius:4px;background:var(--surface3);color:var(--text);border:1px solid var(--border);">
                   <option value="">-- Select file to preview --</option>
                 </select>
-                <div id="batchSelectedFileInfo" style="font-size:0.85rem;line-height:1.5;color:var(--muted);"></div>
+                <button class="btn btn-success btn-sm" id="downloadAllZipBtn" onclick="downloadBatchAllAsZip()" title="Download all as ZIP"><i class="fas fa-archive"></i> ZIP All</button>
               </div>
+              <div id="batchSelectedFileInfo" style="font-size:0.85rem;line-height:1.6;color:var(--muted);"></div>
             </div>
           </div>
         </div>
@@ -1100,19 +1096,6 @@
 <script type="module">
 import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js';
 import { fetchFile } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/esm/index.js';
-
-// Debug: trace every URL.createObjectURL call so we can identify which line
-// triggers a blob URL that later causes ERR_REQUEST_RANGE_NOT_SATISFIABLE.
-// Check the browser console for '[page] createObjectURL' entries with stack traces.
-{
-  const _orig = URL.createObjectURL.bind(URL);
-  URL.createObjectURL = (obj) => {
-    const url = _orig(obj);
-    console.trace('[page] URL.createObjectURL →', url,
-      obj instanceof Blob ? 'Blob size=' + obj.size : obj);
-    return url;
-  };
-}
 
 // ── Helpers ─────────────────────────────────────────
 /** Converts a Blob/File to a data: URL via FileReader — no blob: URL created. */
@@ -1175,7 +1158,8 @@ Object.assign(window, {
   onOverlayFileChange, onMixAudioFileChange, onConcatFileChange,
   onSxsFileChange, onPipFileChange,
   setMode, addToStack, removeStackItem, moveStackItem, updateStackPreview, runProcessStack,
-  toggleBatchMode, handleBatchFiles, clearBatchQueue, removeBatchFile, downloadBatchFile, downloadAllBatchFiles
+  toggleBatchMode, handleBatchFiles, clearBatchQueue, removeBatchFile, downloadBatchFile, downloadAllBatchFiles,
+  downloadBatchAllAsZip, selectBatchOutput
 });
 
 function onSubtitleFileChange(input) {
@@ -1425,18 +1409,15 @@ async function requestWakeLock() {
   try {
     if ('wakeLock' in navigator) {
       wakeLock = await navigator.wakeLock.request('screen');
-      console.log('[PWA] Screen Wake Lock acquired');
       addLog('Screen will stay on during processing', 'ok', 'fas fa-mobile-screen-button');
     }
   } catch (err) {
-    console.error('[PWA] Wake Lock request failed:', err);
   }
 }
 
 function releaseWakeLock() {
   if (wakeLock) {
     wakeLock.release().then(() => {
-      console.log('[PWA] Screen Wake Lock released');
       wakeLock = null;
     });
   }
@@ -1507,7 +1488,6 @@ async function loadFFmpeg() {
   } catch (err) {
     // ffmpeg.wasm rejects with a plain string, not an Error — guard accordingly
     const msg = (err instanceof Error ? err.message : String(err)) || 'unknown error';
-    console.error('FFmpeg load error:', err);
     dot.className = 'dot';
     txt.textContent = 'Load failed: ' + msg;
     btn.disabled = false;
@@ -1656,6 +1636,38 @@ function handleBatchFiles(files) {
   updateBatchQueueUI();
   addLog(`Added ${batchQueue.length} file(s) to batch queue.`, 'ok');
   syncProcessBtn();
+
+  // If we're already in stack mode, make the freshly-queued files usable for
+  // building a stack: load a representative file (for crop/pad dimensions) and
+  // refresh the stack controls so "Add to Stack" / "Process Stack" enable.
+  if (stackMode && batchQueue.length > 0) {
+    loadFirstBatchFileForStack();
+    refreshStackControls();
+    renderStack();
+  }
+}
+
+// Load the first queued batch file into the input preview so stack ops that need
+// source dimensions (crop, pad) have something to read. No-op if a file is
+// already loaded. Shared by setMode() and handleBatchFiles().
+function loadFirstBatchFileForStack() {
+  if (inputFile || !batchMode || batchQueue.length === 0) return;
+  const firstBatchFile = batchQueue[0].file;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    inputFile = firstBatchFile;
+    inputExt = firstBatchFile.name.split('.').pop().toLowerCase();
+    const video = document.getElementById('inputVideo');
+    video.src = e.target.result;
+    video.onloadedmetadata = () => {
+      document.getElementById('inputWrap').classList.remove('hidden');
+      document.getElementById('dropZone').classList.add('hidden');
+      addLog(`Loaded first batch file for stack building: "${firstBatchFile.name}"`, 'ok');
+      refreshStackControls();
+      renderStack();
+    };
+  };
+  reader.readAsDataURL(firstBatchFile);
 }
 
 function updateBatchTileStates() {
@@ -2516,7 +2528,6 @@ async function runProcess() {
     // Still try to clean up FS on error
     try { await ffmpeg.deleteFile(inName); } catch (_) {}
     try { await ffmpeg.deleteFile('output.' + outExt); } catch (_) {}
-    console.error(err);
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-gear"></i> Process Video';
@@ -2693,7 +2704,6 @@ async function processBatchFile(item) {
   try { await ffmpeg.deleteFile(outName); } catch (_) {}
   
   // Update batch outputs display in Output section
-  console.log('[processBatchFile] Calling updateBatchOutputsDisplay for:', item.file.name);
   updateBatchOutputsDisplay();
 }
 
@@ -2701,74 +2711,98 @@ async function processBatchFile(item) {
 function updateBatchOutputsDisplay() {
   const completed = batchQueue.filter(item => item.status === 'done');
   const wrap = document.getElementById('batchOutputsWrap');
+  const outContent = document.getElementById('outContent');
+  const outEmpty = document.getElementById('outEmpty');
   const count = document.getElementById('batchCompleteCount');
   const selectEl = document.getElementById('batchOutputSelect');
-  const previewEl = document.getElementById('batchOutputsPreview');
   const downloadAllBtn = document.getElementById('downloadAllZipBtn');
   
-  console.log('[updateBatchOutputsDisplay] completed:', completed.length, 'wrap:', wrap, 'btn:', downloadAllBtn);
-  
   if (!wrap || !downloadAllBtn) {
-    console.warn('[Batch] Missing elements: wrap=', wrap, 'downloadAllBtn=', downloadAllBtn);
     return;
   }
   
   count.textContent = completed.length;
   
   if (completed.length === 0) {
-    console.log('[updateBatchOutputsDisplay] No completed files, hiding');
     wrap.classList.add('hidden');
-    downloadAllBtn.style.display = 'none';
     return;
   }
   
-  console.log('[updateBatchOutputsDisplay] Showing batch outputs section');
+  // Show batch outputs in the output section
   wrap.classList.remove('hidden');
+  outContent.classList.remove('hidden');
+  outEmpty.classList.add('hidden');
   
-  // Update dropdown
+  // Update dropdown, preserving current selection if still valid
+  const prevValue = selectEl.value;
   selectEl.innerHTML = '<option value="">-- Select file to preview --</option>' +
-    completed.map((item, idx) => {
+    completed.map((item) => {
       const batchIdx = batchQueue.indexOf(item);
       const sizeMB = item.output.size / 1024 / 1024;
       return `<option value="${batchIdx}">${item.file.name} → ${item.outputName} (${sizeMB.toFixed(2)}MB)</option>`;
     }).join('');
   
-  // Show preview section and download all button
-  previewEl.style.display = 'block';
-  downloadAllBtn.disabled = false;
-  downloadAllBtn.style.display = 'inline-block';
-  downloadAllBtn.style.visibility = 'visible';
-  downloadAllBtn.style.opacity = '1';
-  console.log('[updateBatchOutputsDisplay] Button display set to:', downloadAllBtn.style.display, 'visibility:', downloadAllBtn.style.visibility);
-  
-  // If first item, auto-select it
-  if (selectEl.selectedIndex === 0 && completed.length > 0) {
-    selectEl.selectedIndex = 1;
-    selectBatchOutput(completed[0] ? batchQueue.indexOf(completed[0]) : '');
+  // Restore previous selection, or auto-select the first completed file
+  const validValues = completed.map(item => String(batchQueue.indexOf(item)));
+  if (prevValue && validValues.includes(prevValue)) {
+    selectEl.value = prevValue;
+  } else {
+    const firstIdx = batchQueue.indexOf(completed[0]);
+    selectEl.value = String(firstIdx);
+    selectBatchOutput(firstIdx);
   }
 }
 
 function selectBatchOutput(batchIdx) {
   if (batchIdx == null || batchIdx === '') return;
   const item = batchQueue[parseInt(batchIdx)];
-  if (!item) return;
+  if (!item || !item.output) return;
   
   const infoDiv = document.getElementById('batchSelectedFileInfo');
   const sizeMB = item.output.size / 1024 / 1024;
+  
+  // Preview the selected file in the main output player
+  const outVideo = document.getElementById('outVideo');
+  const outImg = document.getElementById('outImg');
+  const outAudioWrap = document.getElementById('outAudioWrap');
+  const outAudio = document.getElementById('outAudio');
+  const url = URL.createObjectURL(item.output);
+  const name = (item.outputName || '').toLowerCase();
+  
+  // Reset players
+  outVideo.classList.add('hidden');
+  outImg.classList.add('hidden');
+  outAudioWrap.classList.add('hidden');
+  
+  if (/\.(png|jpg|jpeg|webp|bmp)$/.test(name)) {
+    outImg.src = url;
+    outImg.classList.remove('hidden');
+  } else if (/\.(mp3|wav|ogg|aac|m4a|flac)$/.test(name)) {
+    outAudio.src = url;
+    outAudioWrap.classList.remove('hidden');
+  } else if (/\.gif$/.test(name)) {
+    outImg.src = url;
+    outImg.classList.remove('hidden');
+  } else {
+    outVideo.src = url;
+    outVideo.classList.remove('hidden');
+  }
+  
+  // Update meta line + main download button to point at selected file
+  document.getElementById('outMeta').textContent = `${item.outputName} · ${sizeMB.toFixed(2)} MB`;
+  const dlBtn = document.getElementById('dlBtn');
+  dlBtn.onclick = () => downloadBatchFile(parseInt(batchIdx));
   
   infoDiv.innerHTML = `
     <strong>Input:</strong> ${item.file.name}<br>
     <strong>Output:</strong> ${item.outputName}<br>
     <strong>Size:</strong> ${sizeMB.toFixed(2)}MB<br>
-    <strong>Status:</strong> <span style="color:var(--success);">✓ Complete</span><br>
-    <button class="btn btn-sm" onclick="downloadBatchFile(${batchIdx})" style="margin-top:8px;"><i class="fas fa-download"></i> Download Individual</button>
+    <strong>Status:</strong> <span style="color:var(--success);">✓ Complete</span>
   `;
 }
 
 async function downloadBatchAllAsZip() {
-  console.log('[downloadBatchAllAsZip] Called');
   const completed = batchQueue.filter(item => item.status === 'done');
-  console.log('[downloadBatchAllAsZip] Completed files:', completed.length);
   
   if (completed.length === 0) {
     addLog('No completed files to download', 'warn');
@@ -3252,7 +3286,11 @@ async function renderOutput(data, ext) {
   document.getElementById('outMeta').textContent = metaText;
   document.getElementById('quickOutMeta').textContent = metaText;
   document.getElementById('dlBtn').innerHTML = `<i class="fas fa-download"></i> Download output.${ext}`;
+  document.getElementById('dlBtn').onclick = download;
   document.getElementById('quickDlBtn').innerHTML = `<i class="fas fa-download"></i> Download output.${ext}`;
+  // Hide batch outputs section in single mode output
+  const bw = document.getElementById('batchOutputsWrap');
+  if (bw) bw.classList.add('hidden');
   
   // Show quick download in options panel (only in single mode, not batch)
   if (!batchMode) {
@@ -3469,13 +3507,14 @@ function renderStack() {
       </div>`).join('');
   }
   const pbtn = document.getElementById('processStackBtn');
-  pbtn.disabled  = stack.length === 0 || !inputFile;
+  pbtn.disabled  = stack.length === 0 || (!inputFile && !(batchMode && batchQueue.length > 0));
   pbtn.innerHTML = `<i class="fas fa-layer-group"></i> Process Stack${stack.length ? ` (${stack.length})` : ''}`;
   updateStackPreview();
 }
 
 function addToStack() {
-  if (!CHAINABLE.has(currentOp) || !inputFile) return;
+  const hasInput = !!inputFile || (batchMode && batchQueue.length > 0);
+  if (!CHAINABLE.has(currentOp) || !hasInput) return;
   const params = captureStackParams(currentOp);
   if (!params) return;
   stack.push({ id: ++stackSeq, op: currentOp, params });
@@ -3501,7 +3540,8 @@ function refreshStackControls() {
   const note   = document.getElementById('addStackNote');
   if (!addBtn || !note) return;
   const ok = CHAINABLE.has(currentOp);
-  addBtn.disabled = !ok || !inputFile;
+  const hasInput = !!inputFile || (batchMode && batchQueue.length > 0);
+  addBtn.disabled = !ok || !hasInput;
   if (ok) {
     note.classList.add('hidden');
     note.innerHTML = '';
@@ -3524,21 +3564,7 @@ function setMode(mode) {
   
   // When entering stack mode with batch files, load the first batch file for stacking
   if (stackMode && batchMode && batchQueue.length > 0 && !inputFile) {
-    const firstBatchFile = batchQueue[0].file;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      inputFile = firstBatchFile;
-      inputExt = firstBatchFile.name.split('.').pop().toLowerCase();
-      const video = document.getElementById('inputVideo');
-      video.src = e.target.result;
-      video.onloadedmetadata = () => {
-        document.getElementById('inputWrap').classList.remove('hidden');
-        document.getElementById('dropZone').classList.add('hidden');
-        addLog(`Loaded first batch file for stack building: "${firstBatchFile.name}"`, 'ok');
-        refreshStackControls();
-      };
-    };
-    reader.readAsDataURL(firstBatchFile);
+    loadFirstBatchFileForStack();
   }
   
   document.querySelectorAll('.op-tile').forEach(tile => {
@@ -3554,7 +3580,16 @@ function setMode(mode) {
 
 // ── Process stack ─────────────────────────────────────
 async function runProcessStack() {
-  if (!inputFile || stack.length === 0) return;
+  if (stack.length === 0) return;
+
+  // Batch + stack: apply the whole stack to every queued file and show results
+  // in the batch outputs div (instead of the single-file output player).
+  if (batchMode && batchQueue.length > 0) {
+    await runBatchStack();
+    return;
+  }
+
+  if (!inputFile) return;
 
   if (!isLoaded()) {
     await loadFFmpeg();
@@ -3600,7 +3635,6 @@ async function runProcessStack() {
     addLog('Error: ' + errMsg, 'err');
     try { await ffmpeg.deleteFile(inName); } catch (_) {}
     try { if (outName) await ffmpeg.deleteFile(outName); } catch (_) {}
-    console.error(err);
   } finally {
     setTimeout(() => {
       pw.classList.add('hidden');
@@ -3614,16 +3648,140 @@ async function runProcessStack() {
   }
 }
 
+// Build the ffmpeg args for the current stack against an arbitrary file.
+// Trim is ignored in batch mode (each file runs start-to-end), matching the
+// single-op batch path in processBatchFile().
+function composeStackArgsFor(inName, outName, srcW, srcH, clipDur) {
+  const ctx = { clipDur: clipDur || 0, srcW: srcW || 1920, srcH: srcH || 1080 };
+  const vf = [], af = [];
+  for (const item of stack) {
+    const f = opToFilters(item, ctx);
+    if (f.vf) vf.push(...f.vf);
+    if (f.af) af.push(...f.af);
+  }
+  const outFmt = document.getElementById('stackOutFmt').value;
+  const args = ['-i', inName];
+  if (vf.length) args.push('-vf', vf.join(','));
+  if (af.length) args.push('-af', af.join(','));
+  args.push(...getFormatCodecArgs(outFmt));
+  args.push(outName);
+  return { args, outFmt };
+}
+
+// ── Process stack across every batched file ────────────
+async function runBatchStack() {
+  if (!isLoaded()) {
+    await loadFFmpeg();
+    if (!isLoaded()) return;
+  }
+
+  const btn  = document.getElementById('processStackBtn');
+  const orig = btn.innerHTML;
+  const opTiles = document.querySelectorAll('.op-tile');
+  const progWrap = document.getElementById('progWrap');
+
+  progWrap.classList.remove('hidden');
+  document.getElementById('progLabel').textContent = 'Batch Stack…';
+  document.getElementById('progFill').style.width = '0%';
+  document.getElementById('progPct').textContent  = '0%';
+
+  opTiles.forEach(t => { t.style.pointerEvents = 'none'; t.style.opacity = '0.5'; });
+  btn.disabled  = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing…';
+
+  addLog(`Starting batch stack (${stack.length} op${stack.length === 1 ? '' : 's'}) on ${batchQueue.length} file(s)…`, 'ok');
+
+  try {
+    await requestWakeLock();
+
+    for (let i = 0; i < batchQueue.length; i++) {
+      const item = batchQueue[i];
+      batchCurrent = i;
+
+      document.getElementById('progFill').style.width = (i / batchQueue.length * 100) + '%';
+      document.getElementById('progPct').textContent  = Math.round(i / batchQueue.length * 100) + '%';
+
+      item.status = 'processing';
+      updateBatchQueueUI();
+      addLog(`[${i + 1}/${batchQueue.length}] Processing: ${item.file.name}`, 'ok');
+
+      try {
+        await processBatchStackFile(item);
+        item.status = 'done';
+      } catch (err) {
+        item.status = 'error';
+        item.error  = err.message || String(err);
+        addLog(`Error processing ${item.file.name}: ${item.error}`, 'error');
+      }
+      updateBatchQueueUI();
+    }
+
+    document.getElementById('progFill').style.width = '100%';
+    document.getElementById('progPct').textContent  = '100%';
+
+    const done   = batchQueue.filter(i => i.status === 'done').length;
+    const failed = batchQueue.filter(i => i.status === 'error').length;
+    addLog(`Batch stack complete: ${done} succeeded, ${failed} failed.`, failed === 0 ? 'ok' : 'warn');
+  } finally {
+    setTimeout(() => {
+      progWrap.classList.add('hidden');
+      document.getElementById('progFill').style.width = '0%';
+      document.getElementById('progPct').textContent  = '0%';
+      document.getElementById('progLabel').textContent = 'Processing…';
+    }, 1000);
+
+    updateBatchOutputsDisplay();
+    opTiles.forEach(t => { t.style.pointerEvents = 'auto'; t.style.opacity = '1'; });
+    btn.disabled  = false;
+    btn.innerHTML = orig;
+    batchCurrent  = null;
+    releaseWakeLock();
+  }
+}
+
+async function processBatchStackFile(item) {
+  const file = item.file;
+  const inputFileExt = file.name.split('.').pop().toLowerCase() || 'mp4';
+  const outFmt = document.getElementById('stackOutFmt').value;
+  const outExt = ['gif','mkv','mov','webm','avi'].includes(outFmt) ? outFmt : 'mp4';
+
+  const rand    = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  const inName  = 'batchinput_'  + rand + '.' + inputFileExt;
+  const outName = 'batchoutput_' + rand + '.' + outExt;
+  const baseName = file.name.replace(/\.[^.]+$/, '');
+  item.outputName = baseName + '_processed.' + outExt;
+
+  addLog(`  Writing ${file.name}…`, 'log');
+  await ffmpeg.writeFile(inName, await fetchFile(file));
+
+  // Get this file's dimensions/duration so crop/pad/fade compose correctly.
+  const vid = document.createElement('video');
+  vid.src = await blobToDataURL(file);
+  await new Promise(resolve => { vid.onloadedmetadata = () => resolve(); });
+
+  const { args } = composeStackArgsFor(inName, outName, vid.videoWidth, vid.videoHeight, vid.duration);
+
+  addLog('  ffmpeg ' + args.join(' '), 'log');
+  const res = await ffmpeg.exec(args);
+  if (res !== 0) throw new Error(`ffmpeg exited with code ${res}`);
+
+  const data = await ffmpeg.readFile(outName);
+  item.output = new Blob([data.buffer], { type: mime(outExt) });
+
+  try { await ffmpeg.deleteFile(inName); } catch (_) {}
+  try { await ffmpeg.deleteFile(outName); } catch (_) {}
+
+  updateBatchOutputsDisplay();
+}
+
 // ── PWA Install Prompt ─────────────────────────────────────────
 // Let the browser handle native install UI in the address bar
 window.addEventListener('beforeinstallprompt', (e) => {
-  console.log('[PWA] Install prompt ready - browser will show install button in address bar');
   // Don't prevent default - let browser show native UI
 });
 
 // Handle app installed event
 window.addEventListener('appinstalled', () => {
-  console.log('[PWA] App installed');
   addLog('App installed successfully!', 'ok', 'fas fa-circle-check');
 });
 
@@ -3636,14 +3794,12 @@ if ('serviceWorker' in navigator) {
         scope: './',
         updateViaCache: 'none',
       });
-      console.log('[PWA] Service Worker registered:', registration);
-      
+
       // Check for updates periodically
       setInterval(async () => {
         try {
           await registration.update();
         } catch (err) {
-          console.error('[PWA] Update check failed:', err);
         }
       }, 60000); // Check every 60 seconds
       
@@ -3653,7 +3809,6 @@ if ('serviceWorker' in navigator) {
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
             // New service worker is ready, show update notification
-            console.log('[PWA] New version available');
             addLog('New version available - reload to update', 'ok', 'fas fa-circle-info');
           }
         });
@@ -3661,20 +3816,15 @@ if ('serviceWorker' in navigator) {
       
       // Log offline/online status
       window.addEventListener('online', () => {
-        console.log('[PWA] Back online');
         addLog('Back online', 'ok', 'fas fa-wifi');
       });
 
       window.addEventListener('offline', () => {
-        console.log('[PWA] Going offline');
         addLog('Offline - working with cached resources', 'warn', 'fas fa-triangle-exclamation');
       });
     } catch (err) {
-      console.error('[PWA] Service Worker registration failed:', err);
     }
   });
-} else {
-  console.warn('[PWA] Service Workers not supported');
 }
 </script>
 </body>
