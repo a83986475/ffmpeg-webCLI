@@ -4196,29 +4196,73 @@ async function confirmAutoCaptionTranscript() {
     addLog('Verifying ffmpeg.wasm is loaded and ready…', 'ok');
     let retries = 0;
     const maxRetries = 30; // 30 retries x 200ms = 6 seconds max wait
-    while (!isLoaded() && retries < maxRetries) {
+    while ((!isLoaded() || !ffmpeg) && retries < maxRetries) {
       await new Promise(r => setTimeout(r, 200));
       retries++;
     }
     
     // If preemptive load didn't complete, actively load now
-    if (!isLoaded()) {
+    if (!isLoaded() || !ffmpeg) {
       addLog('Preemptive load incomplete - loading ffmpeg now…', 'ok');
       try {
         await loadFFmpeg();
+        // Give ffmpeg a moment to fully initialize
+        await new Promise(r => setTimeout(r, 1000));
       } catch (e) {
         console.error('Error loading ffmpeg:', e);
         throw new Error('Failed to load ffmpeg.wasm: ' + (e.message || String(e)));
       }
     }
     
-    // Final check
-    if (!isLoaded()) {
-      throw new Error('FFmpeg failed to load. Please try again or reload the page.');
+    // Final check - verify both UI state and object exist
+    if (!isLoaded() || !ffmpeg || typeof ffmpeg.writeFile !== 'function') {
+      console.error('FFmpeg check failed:', {
+        isLoaded: isLoaded(),
+        ffmpegExists: !!ffmpeg,
+        hasWriteFile: ffmpeg && typeof ffmpeg.writeFile === 'function'
+      });
+      throw new Error('FFmpeg failed to initialize properly. Please try again or reload the page.');
+    }
+    
+    // Aggressive last-resort: directly call ffmpeg.load() with full configuration
+    if (ffmpeg && typeof ffmpeg.load === 'function') {
+      try {
+        addLog('Ensuring ffmpeg is fully initialized…', 'ok');
+        const esmBase  = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/';
+        const coreBase = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm';
+        const classWorkerURL = new URL('./worker.js', location.href).href;
+        const coreURL = `${coreBase}/ffmpeg-core.js`;
+        const wasmURL = `${coreBase}/ffmpeg-core.wasm`;
+        await ffmpeg.load({ classWorkerURL, coreURL, wasmURL });
+      } catch (e) {
+        // It's okay if load fails (likely already loaded) - proceed and try to use it
+        console.warn('ffmpeg.load() call in embed:', e.message);
+      }
     }
     
     addLog('Writing SRT subtitle file…', 'ok');
-    await ffmpeg.writeFile('autogen.srt', new TextEncoder().encode(srtContent));
+    try {
+      await ffmpeg.writeFile('autogen.srt', new TextEncoder().encode(srtContent));
+    } catch (e) {
+      console.error('Error writing SRT file:', e);
+      throw new Error('Failed to write subtitle file: ' + (e.message || String(e)));
+    }
+    
+    // ── CRITICAL: Restore input file to ffmpeg filesystem ──
+    // ffmpeg.terminate() cleared the filesystem, so we must re-write the input file
+    // before we can use it for subtitle embedding
+    const inName = 'input.' + inputExt;
+    addLog(`Restoring input file to ffmpeg filesystem: ${inName}…`, 'ok');
+    try {
+      if (!inputFile) {
+        throw new Error('Input file not available - original file lost');
+      }
+      await ffmpeg.writeFile(inName, await fetchFile(inputFile));
+      addLog('Input file restored successfully', 'ok');
+    } catch (e) {
+      console.error('Error restoring input file:', e);
+      throw new Error('Failed to restore input file to ffmpeg: ' + (e.message || String(e)));
+    }
     
     // ── MEMORY MANAGEMENT: Clean up Transcriber & model weights before re-engaging ffmpeg ──
     // This is CRITICAL to avoid OOM when both ffmpeg and whisper are resident.
@@ -4246,7 +4290,6 @@ async function confirmAutoCaptionTranscript() {
       throw new Error(`Invalid format: ${fmt}`);
     }
     
-    const inName = 'input.' + inputExt;
     const outName = 'output.' + fmt;
     const subsCodec = fmt === 'mkv' ? 'copy' : 'mov_text';
     
