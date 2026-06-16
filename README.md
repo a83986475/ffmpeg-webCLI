@@ -197,6 +197,7 @@ Models are lazy-loaded and cached on first use (~15–30 seconds for initial dow
 - ✓ Generates SRT timestamps with millisecond precision
 - ✓ Edit captions directly in the textarea (reset or confirm changes)
 - ✓ Real-time progress bar (0–100%) during transcription
+- ✓ Memory-optimized: ffmpeg.wasm (31 MB) is unloaded during transcription and reloaded before embedding to maximize available memory for Whisper
 - ✓ Sequential memory management: Whisper model is disposed before FFmpeg re-engages to prevent out-of-memory errors
 - ✓ Works with any video duration or language (defaults to English, auto-detectable per Whisper)
 
