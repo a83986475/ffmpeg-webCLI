@@ -172,7 +172,7 @@ Mux an `.srt`, `.vtt`, or `.ass` subtitle file into the video as a **soft subtit
 Video and audio are stream-copied (zero quality loss, near-instant). Hard-burning subtitles into the picture requires a libass-enabled ffmpeg build and is not available in the standard WebAssembly core.
 
 ### 🎤 Auto-Caption (Whisper)
-Generate **automatic captions** from speech using [OpenAI's Whisper](https://openai.com/research/whisper) model, running entirely on-device via [Transformers.js](https://xenova.github.io/transformers.js/). Edit the transcript before embedding it as soft subtitles.
+Generate **automatic captions** from speech using [OpenAI's Whisper](https://openai.com/research/whisper) model via [Transformers.js](https://xenova.github.io/transformers.js/). Transcription runs entirely in your browser—your audio never leaves your device. Model weights and the library are downloaded from the network on first use and cached for offline use thereafter. Edit the transcript before embedding it as soft subtitles.
 
 **Workflow:**
 1. **Extract** : Audio is extracted from the video at 16 kHz mono
@@ -192,7 +192,8 @@ Models are lazy-loaded and cached on first use (~15–30 seconds for initial dow
 - **MKV** : subtitle stream copied natively
 
 **Key Features:**
-- ✓ 100% on-device (no API calls, no uploads)
+- ✓ Audio never leaves your device (no uploads, no API calls)
+- ✓ Transcription runs entirely in-browser after initial model download
 - ✓ Generates SRT timestamps with millisecond precision
 - ✓ Edit captions directly in the textarea (reset or confirm changes)
 - ✓ Real-time progress bar (0–100%) during transcription
