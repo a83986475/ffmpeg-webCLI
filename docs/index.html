@@ -4542,7 +4542,6 @@ async function confirmAutoCaptionTranscript() {
     const burnSubtitles = burnCheckbox ? burnCheckbox.checked : false;
     const outName = 'output.' + fmt;
     
-    console.log('🔥 Auto-Caption embed debug:', { fmt, burnSubtitles, checkboxElement: !!burnCheckbox, srtContent: srtContent ? srtContent.substring(0, 100) : 'MISSING' });
     addLog(`DEBUG: Format=${fmt}, Burn=${burnSubtitles}, SRT length=${srtContent ? srtContent.length : 0}`, 'ok');
     
     // Build ffmpeg args

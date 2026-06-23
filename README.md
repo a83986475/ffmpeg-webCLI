@@ -63,49 +63,6 @@ ffmpeg-webCLI covers the common tasks of all of them, for free, with files that
 
 ## Use Cases
 
-### ⛓ Operation Chaining (Stack Mode)
-Stack several compatible operations and run them in a **single pass**. Switch the Operations panel to **Stack (chain)** mode, configure an op, and click **Add to Stack** to queue it. The queue is an ordered, reorderable list - move items up/down or remove them - and a live **composed command preview** shows the exact `ffmpeg` invocation before you run it.
-
-All stacked operations are merged into one filter chain (`-vf "a,b,c"` / `-af "x,y"`) and encoded **only once**, so quality loss from repeated re-encoding is avoided. Any active trim is applied first as input seeking, then the chain runs, then the single encode targets your chosen output format. For example, crop → grayscale → convert-to-MP4 becomes:
-
-```
-ffmpeg -i input.mp4 -vf "crop=1280:720:0:0,eq=brightness=0:contrast=1:saturation=0" -c:v libx264 -preset fast -c:a aac output.mp4
-```
-
-**Chainable:** Crop, Resize, Rotate/Flip, Adjust (brightness/contrast/saturation), Grayscale, Fade, Denoise, Sharpen/Blur, Speed, Pad/Letterbox and Volume - every single-input, frame-wise video/audio filter.
-
-**Not chainable** (use Single mode): multi-input operations (Concatenate, Side by Side, Picture in Picture, Mix Audio, Embed Subtitles, Logo Overlay) and whole-file or different-output operations (GIF, Thumbnail, Boomerang, Media Info). These are disabled in Stack mode with an inline explanation.
-
-**Chaining + batch together:** Stack mode and batch mode combine - enable **Batch**, queue several files, switch to **Stack (chain)**, build your chain once, and click **Process Stack** to apply the *entire* chain to *every* queued file. Each file is composed against its own dimensions/duration (so crop, pad, and fade resolve per file) and encoded in a single pass, with results shown in the batch outputs panel.
-
-### ▶ Batch Processing
-Process multiple video files with the same operation in a single session. Click the **Batch** toggle in the Input Video card to enable batch mode, then drop or select multiple files. Each file is queued with a status indicator:
-- ⧖ **Pending** : queued, waiting to process
-- ▶ **Processing** : currently encoding
-- ✓ **Done** : completed successfully
-- ✗ **Error** : encountered an issue
-
-When you click **Process Queue**, ffmpeg runs through each file sequentially. The log shows real-time progress: `[X/total] Processing: filename`. Completed files appear in the **Batch Outputs** panel of the Output section, where you can pick any file to preview it in the player, download files individually, or grab everything at once with **ZIP All** - no need to wait for the entire batch to finish before downloading completed files.
-
-**Batch + Stack (chaining):** Batch isn't limited to a single operation. Switch the Operations panel to **Stack (chain)** while batch mode is on, build a chain, and **Process Stack** applies the whole chain to every queued file in one pass each. See [Operation Chaining](#-operation-chaining-stack-mode) above.
-
-**Graceful Fallback:** If you have a video already loaded and enable batch mode, the app automatically adds it to the queue so you don't lose your work.
-
-**Supported Operations in Batch Mode** (25 total):
-- All single-input filters: Resize, Speed, Fade, Denoise, Sharpen/Blur, Adjust, Grayscale, Rotate/Flip, Volume, Pad, Audio Extract, Mute, Strip Metadata, Loop, Normalize Audio
-- Format conversion and compression across all output formats (MP4, WebM, MKV, MOV, AVI, GIF, MP3, AAC, WAV, OGG, FLAC)
-
-**Unsupported in Batch Mode** (operations require per-file configuration, multi-input coordination, or cause memory constraints):
-- **Crop** : Dimension-dependent; different videos may need different crop values
-- **Overlay** (Logo) : Requires selecting a separate image file for each batch item
-- **Multi-input ops** : Concatenate, Side by Side, Picture in Picture, Mix Audio, Embed Subtitles
-- **Memory-intensive** : Reverse (requires full-video buffering + re-encoding; with multiple large files in batch, risks hitting the 2GB memory ceiling and crashing)
-- **Whole-file effects** : Boomerang (special reversal effect)
-- **Informational** : Media Info (displays metadata, doesn't process)
-- **Unpredictable** : Raw FFmpeg (user-defined commands differ per file)
-
-These operations are visually greyed out in batch mode to prevent accidental selection.
-
 ### ▶ GIF Maker
 Convert any video clip into an animated GIF. Set the frame rate and output width; height scales automatically to preserve the aspect ratio. Uses a two-pass palette generation for the best possible color quality.
 
@@ -329,6 +286,49 @@ Apply a sharpening or blur effect to the entire video.
   - Heavy: `boxblur=12:1`
 
 Video is re-encoded to H.264; audio is stream-copied.
+
+### ⛓ Operation Chaining (Stack Mode)
+Stack several compatible operations and run them in a **single pass**. Switch the Operations panel to **Stack (chain)** mode, configure an op, and click **Add to Stack** to queue it. The queue is an ordered, reorderable list - move items up/down or remove them - and a live **composed command preview** shows the exact `ffmpeg` invocation before you run it.
+
+All stacked operations are merged into one filter chain (`-vf "a,b,c"` / `-af "x,y"`) and encoded **only once**, so quality loss from repeated re-encoding is avoided. Any active trim is applied first as input seeking, then the chain runs, then the single encode targets your chosen output format. For example, crop → grayscale → convert-to-MP4 becomes:
+
+```
+ffmpeg -i input.mp4 -vf "crop=1280:720:0:0,eq=brightness=0:contrast=1:saturation=0" -c:v libx264 -preset fast -c:a aac output.mp4
+```
+
+**Chainable:** Crop, Resize, Rotate/Flip, Adjust (brightness/contrast/saturation), Grayscale, Fade, Denoise, Sharpen/Blur, Speed, Pad/Letterbox and Volume - every single-input, frame-wise video/audio filter.
+
+**Not chainable** (use Single mode): multi-input operations (Concatenate, Side by Side, Picture in Picture, Mix Audio, Embed Subtitles, Logo Overlay) and whole-file or different-output operations (GIF, Thumbnail, Boomerang, Media Info). These are disabled in Stack mode with an inline explanation.
+
+**Chaining + batch together:** Stack mode and batch mode combine - enable **Batch**, queue several files, switch to **Stack (chain)**, build your chain once, and click **Process Stack** to apply the *entire* chain to *every* queued file. Each file is composed against its own dimensions/duration (so crop, pad, and fade resolve per file) and encoded in a single pass, with results shown in the batch outputs panel.
+
+### ▶ Batch Processing
+Process multiple video files with the same operation in a single session. Click the **Batch** toggle in the Input Video card to enable batch mode, then drop or select multiple files. Each file is queued with a status indicator:
+- ⧖ **Pending** : queued, waiting to process
+- ▶ **Processing** : currently encoding
+- ✓ **Done** : completed successfully
+- ✗ **Error** : encountered an issue
+
+When you click **Process Queue**, ffmpeg runs through each file sequentially. The log shows real-time progress: `[X/total] Processing: filename`. Completed files appear in the **Batch Outputs** panel of the Output section, where you can pick any file to preview it in the player, download files individually, or grab everything at once with **ZIP All** - no need to wait for the entire batch to finish before downloading completed files.
+
+**Batch + Stack (chaining):** Batch isn't limited to a single operation. Switch the Operations panel to **Stack (chain)** while batch mode is on, build a chain, and **Process Stack** applies the whole chain to every queued file in one pass each. See [Operation Chaining](#-operation-chaining-stack-mode) above.
+
+**Graceful Fallback:** If you have a video already loaded and enable batch mode, the app automatically adds it to the queue so you don't lose your work.
+
+**Supported Operations in Batch Mode** (25 total):
+- All single-input filters: Resize, Speed, Fade, Denoise, Sharpen/Blur, Adjust, Grayscale, Rotate/Flip, Volume, Pad, Audio Extract, Mute, Strip Metadata, Loop, Normalize Audio
+- Format conversion and compression across all output formats (MP4, WebM, MKV, MOV, AVI, GIF, MP3, AAC, WAV, OGG, FLAC)
+
+**Unsupported in Batch Mode** (operations require per-file configuration, multi-input coordination, or cause memory constraints):
+- **Crop** : Dimension-dependent; different videos may need different crop values
+- **Overlay** (Logo) : Requires selecting a separate image file for each batch item
+- **Multi-input ops** : Concatenate, Side by Side, Picture in Picture, Mix Audio, Embed Subtitles
+- **Memory-intensive** : Reverse (requires full-video buffering + re-encoding; with multiple large files in batch, risks hitting the 2GB memory ceiling and crashing)
+- **Whole-file effects** : Boomerang (special reversal effect)
+- **Informational** : Media Info (displays metadata, doesn't process)
+- **Unpredictable** : Raw FFmpeg (user-defined commands differ per file)
+
+These operations are visually greyed out in batch mode to prevent accidental selection.
 
 ---
 
