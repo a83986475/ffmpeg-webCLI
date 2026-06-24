@@ -210,7 +210,22 @@
     .progress-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .2s ease; width: 0%; }
 
     /* ── Log ── */
-    .log { font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace; font-size: 0.73rem; background: #080a10; color: #7dd3fc; padding: 12px;height: 130px; overflow-y: auto; line-height: 1.55; border-radius: 0 0 var(--r) var(--r); }
+    .log-shell { background: #080a10; border-radius: 0 0 var(--r) var(--r); overflow: hidden; }
+    .log-current {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+      font-size: 0.73rem;
+      line-height: 1.55;
+      padding: 10px 12px;
+      background: #0f1420;
+      border-bottom: 1px solid rgba(129, 226, 248, 0.16);
+      color: #e2e8f0;
+    }
+    .log-current-label { color: #94a3b8; margin-right: 8px; }
+    .log-current-value { color: #7dd3fc; word-break: break-all; }
+    .log { font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace; font-size: 0.73rem; background: #080a10; color: #7dd3fc; padding: 12px; height: 130px; overflow-y: auto; line-height: 1.55; }
     .log-line { word-break: break-all; }
     .log-line.err { color: #fca5a5; }
     .log-line.ok  { color: #86efac; }
@@ -266,6 +281,7 @@
 
       .size-estimate { flex-wrap: wrap; gap: 4px; }
 
+      .log-current { font-size: 0.68rem; padding: 9px 10px; }
       .log { height: 90px; font-size: 0.68rem; padding: 10px; }
 
       .out-actions { flex-direction: column; align-items: stretch; }
@@ -1155,7 +1171,13 @@
       FFmpeg Log
       <button class="btn btn-ghost btn-sm" onclick="clearLog()"><i class="fas fa-broom"></i> Clear</button>
     </div>
-    <div class="log" id="log"><div class="log-line ok">Ready. Load ffmpeg to begin.</div></div>
+    <div class="log-shell">
+      <div class="log-current" id="logCurrent">
+        <span class="log-current-label">Current command:</span>
+        <span class="log-current-value" id="logCurrentValue">Waiting for ffmpeg command…</span>
+      </div>
+      <div class="log" id="log"><div class="log-line ok">Ready. Load ffmpeg to begin.</div></div>
+    </div>
   </div>
 
 </div><!-- /container -->
@@ -3498,6 +3520,10 @@ function syncProcessBtn() {
 
 function addLog(msg, type = '', icon = '') {
   const log  = document.getElementById('log');
+  const normalized = typeof msg === 'string' ? msg.trimStart() : '';
+  if (/^ffmpeg\s+-/.test(normalized)) {
+    setCurrentCommand(normalized);
+  }
   const line = document.createElement('div');
   line.className = 'log-line' + (type ? ' ' + type : '');
   if (icon) {
@@ -3512,8 +3538,14 @@ function addLog(msg, type = '', icon = '') {
   log.scrollTop = log.scrollHeight;
 }
 
+function setCurrentCommand(command) {
+  const target = document.getElementById('logCurrentValue');
+  if (target) target.textContent = command || 'Waiting for ffmpeg command…';
+}
+
 function clearLog() {
   document.getElementById('log').innerHTML = '';
+  setCurrentCommand('Waiting for ffmpeg command…');
 }
 
 function fmtTime(s) {

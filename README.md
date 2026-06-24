@@ -15,7 +15,7 @@ A browser-based video editor powered by [ffmpeg.wasm](https://github.com/ffmpegw
 
 ✓ **No Server Uploads** : All video processing happens entirely on your device
 
-✓ **32+ Video Operations** : GIF creation, format conversion, compression, trimming, effects, filters, auto-captioning, and more
+✓ **30+ Video Operations** : GIF creation, format conversion, compression, trimming, effects, filters, auto-captioning, and more
 
 ✓ **Batch Processing** : Process multiple videos at once with the same operation - or an entire **operation chain** - applied to every file; real-time progress, per-file preview, individual downloads, ZIP-all, and graceful fallback
 
