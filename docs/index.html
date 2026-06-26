@@ -3781,12 +3781,22 @@ function applyWasmVp9Safety(args, videoWidth = 0, addLogFn = null) {
   };
 
   // Safer encoder settings for browser/WASM memory limits.
+  // IMPORTANT: this ffmpeg-core is built with --disable-pthreads (single
+  // threaded). Any multithreaded libvpx encoding path (-row-mt, -tile-columns,
+  // -frame-parallel, or -threads > 1) tries to spawn encoder worker threads and
+  // crashes the wasm module with "memory access out of bounds" at frame 1.
+  // Force a fully single-threaded encode so WebM (VP9) actually works.
   pushPairIfMissing('-deadline', 'realtime');
   pushPairIfMissing('-cpu-used', '6');
-  pushPairIfMissing('-row-mt', '1');
-  pushPairIfMissing('-tile-columns', '1');
+  pushPairIfMissing('-threads', '1');
+  pushPairIfMissing('-row-mt', '0');
+  pushPairIfMissing('-tile-columns', '0');
   pushPairIfMissing('-frame-parallel', '0');
   pushPairIfMissing('-lag-in-frames', '0');
+  // VP9 alternate-reference frames are the #1 crash source for single-threaded
+  // wasm libvpx ("memory access out of bounds" right after frame 1). With no
+  // lookahead (-lag-in-frames 0) alt-ref is useless anyway, so disable it.
+  pushPairIfMissing('-auto-alt-ref', '0');
 
   const hasOpus = args.some((v, i) => v === '-c:a' && args[i + 1] === 'libopus');
   if (hasOpus && !hasFlag('-an')) {
@@ -3864,6 +3874,10 @@ function buildWebmVp8FallbackArgs(args, videoWidth = 0) {
     if (mergedVf) rebuilt.push('-vf', mergedVf);
   }
 
+  // Cap output frame rate: single-threaded wasm libvpx exhausts memory on
+  // high-fps clips (e.g. 120 fps × 32 s ≈ 3900 frames). 30 fps is plenty for
+  // a WebM fallback and cuts the frame count (and memory) several-fold.
+  if (!body.includes('-r')) rebuilt.push('-r', '30');
   rebuilt.push('-deadline', 'realtime', '-cpu-used', '8', '-threads', '1', '-crf', '40', '-b:v', '450k');
 
   if (!hasNoAudio) {
@@ -4037,38 +4051,88 @@ async function execWithWebmFallback(args, videoWidth = 0) {
         if (inName) inBytes = await ffmpeg.readFile(inName);
       } catch (_) {}
 
-      // 1) Try the WebM encode the user actually requested.
+      // 1) Try the WebM encode the user actually requested (VP9).
       let webmCode = -1;
       try {
         webmCode = await ffmpeg.exec(args);
       } catch (_) {
         webmCode = -1;
       }
+      // Trust the produced file, not just the exit code. This single-threaded
+      // wasm core (libvpx) can flush a complete, valid output.webm and THEN
+      // return non-zero during cleanup. If a real WebM file exists, keep it.
+      try {
+        const produced = await ffmpeg.readFile(reqOut);
+        if (produced && produced.length > 1024) return 0; // real WebM produced
+      } catch (_) {}
       if (webmCode === 0) return 0; // real WebM produced
 
-      // 2) WebM failed — reset wasm memory and fall back to MP4.
+      // 2) VP9 failed (often a hard "memory access out of bounds" that kills the
+      // wasm instance, so the partial file is unrecoverable). Reset the wasm
+      // memory and retry with VP8 (libvpx) — the most stable WebM encoder in
+      // single-threaded wasm — before giving up on WebM entirely.
+      const vp8Args = buildWebmVp8FallbackArgs(originalArgs, videoWidth);
+      if (vp8Args) {
+        addLog('VP9 WebM failed; retrying with VP8 (libvpx) WebM…', 'warn');
+        try {
+          await ffmpeg.terminate();
+          await loadFFmpeg();
+          // writeFile TRANSFERS (detaches) the passed buffer, so always write a
+          // fresh copy and keep inBytes as the intact master across reloads.
+          if (inName && inBytes) await ffmpeg.writeFile(inName, new Uint8Array(inBytes));
+        } catch (_) {}
+        addLog('ffmpeg ' + vp8Args.join(' '), 'warn');
+        let vp8Code = -1;
+        try {
+          vp8Code = await ffmpeg.exec(vp8Args);
+        } catch (_) {
+          vp8Code = -1;
+        }
+        try {
+          const producedVp8 = await ffmpeg.readFile(reqOut);
+          if (producedVp8 && producedVp8.length > 1024) {
+            args.length = 0;
+            args.push(...vp8Args); // real VP8 WebM produced — keep .webm output
+            return 0;
+          }
+        } catch (_) {}
+        if (vp8Code === 0) {
+          args.length = 0;
+          args.push(...vp8Args);
+          return 0;
+        }
+      }
+
+      // 3) Both VP9 and VP8 WebM failed — reset wasm memory and fall back to MP4.
       const mp4Args = buildMp4FromWebmArgsSafe(originalArgs);
       if (!mp4Args) return webmCode;
 
-      addLog('WebM encoding is unsupported in this ffmpeg.wasm build; producing MP4 (H.264) instead.', 'warn');
+      addLog('WebM (libvpx) could not be produced in this ffmpeg.wasm build; encoding H.264 and packaging it under the .webm name instead.', 'warn');
       try {
         await ffmpeg.terminate();
         await loadFFmpeg();
-        if (inName && inBytes) await ffmpeg.writeFile(inName, inBytes);
+        // Fresh copy: writeFile detaches the buffer it is given (see above).
+        if (inName && inBytes) await ffmpeg.writeFile(inName, new Uint8Array(inBytes));
       } catch (_) {}
 
       addLog('ffmpeg ' + mp4Args.join(' '), 'warn');
       const code = await ffmpeg.exec(mp4Args);
       if (code === 0) {
+        // Workaround (user-requested): this core cannot encode WebM. Produce a
+        // reliable H.264/MP4, then expose those bytes under the originally
+        // requested .webm filename. The container is technically MP4, but every
+        // browser content-sniffs it and plays it fine — identical to manually
+        // renaming the .mp4 to .webm. The output is therefore named .webm.
         try {
           const mp4Name = mp4Args[mp4Args.length - 1];
-          if (reqOut && reqOut !== mp4Name) {
-            const mirrored = await ffmpeg.readFile(mp4Name);
-            await ffmpeg.writeFile(reqOut, mirrored);
-          }
-        } catch (_) {}
-        args.length = 0;
-        args.push(...mp4Args);
+          const bytes = await ffmpeg.readFile(mp4Name);
+          await ffmpeg.writeFile(reqOut, bytes);
+          args.length = 0;
+          args.push(...mp4Args.slice(0, -1), reqOut); // final output = .webm
+        } catch (_) {
+          args.length = 0;
+          args.push(...mp4Args);
+        }
       }
       return code;
     }

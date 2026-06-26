@@ -8,9 +8,9 @@
  * - CDN resources caching (ffmpeg library, utilities, icons)
  */
 
-const CACHE_NAME = 'ffmpeg-editor-v3';
-const RUNTIME_CACHE = 'ffmpeg-editor-runtime-v3';
-const CDN_CACHE = 'ffmpeg-editor-cdn-v3';
+const CACHE_NAME = 'ffmpeg-editor-v4';
+const RUNTIME_CACHE = 'ffmpeg-editor-runtime-v4';
+const CDN_CACHE = 'ffmpeg-editor-cdn-v4';
 
 const STATIC_ASSETS = [
   '/',
@@ -42,7 +42,17 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('[SW] Caching static assets');
-        return cache.addAll(STATIC_ASSETS);
+        // Cache each asset individually so a single failed/missing request does
+        // NOT abort the entire install. cache.addAll() rejects atomically, so
+        // one transient failure previously left the SW uninstalled — which kept
+        // an older SW serving a stale index.html.
+        return Promise.allSettled(
+          STATIC_ASSETS.map((url) =>
+            cache.add(url).catch((err) => {
+              console.warn('[SW] Skipped caching', url, err);
+            })
+          )
+        );
       })
       .then(() => {
         console.log('[SW] Installation complete');
