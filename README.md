@@ -35,29 +35,10 @@ A browser-based video editor powered by [ffmpeg.wasm](https://github.com/ffmpegw
 
 ---
 
-## What It Replaces
+## When to use this instead of cloud tools
+Cloud tools like CloudConvert, Kapwing, Ezgif, and Otter handle these same tasks. Every one of them uploads your file to a server. Some are free with ads, some charge, but all of them see your file, and all are subject to data breaches, subpoenas, and shifting privacy policies.
 
-| Tool | What you replace |
-|---|---|
-| CloudConvert | Format conversion, compression, audio extraction |
-| Kapwing | Trim, crop, speed, reverse, fade, filters |
-| Clideo | Trim, compress, merge, mute, loop |
-| Ezgif | GIF maker, reverse, resize, crop, optimize |
-| Online-convert.com | Format conversion across video/audio |
-| MP3cut / Audiotrimmer | Audio extraction and trimming |
-| Metadata2go | Strip metadata |
-| Subtitle Horse | Embed subtitles |
-| Kapwing (side-by-side) | Side by side, picture-in-picture |
-| Rev / Otter | Auto-captioning, transcript editing |
-| Loudnorm tools | Audio normalization |
-
-**The difference that matters:** every one of those tools uploads your file to a
-server. Some are free with ads, some charge -- but all of them *see your file*, and
-all are subject to data breaches, subpoenas, and privacy-policy changes.
-
-ffmpeg-webCLI covers the common tasks of all of them, for free, with files that
-**never leave your device**.
-
+`ffmpeg-webCLI` does format conversion, trimming, compression, GIF creation, audio extraction, captioning, and more **all in your browser, for free**. Reach for it when your files are private, when you can't install software, or when you'd simply rather not upload. Your video never leaves your device.
 
 ---
 
