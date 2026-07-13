@@ -2167,7 +2167,7 @@ async function runProcess() {
     await requestWakeLock();
     
     addLog('正在写入输入文件…', 'ok');
-    await ffmpeg.writeFile(inName, await fetchFile(inputFile));
+    await ffmpeg.writeFile(inName, new Uint8Array(await inputFile.arrayBuffer()));
 
     const trimS   = parseFloat(document.getElementById('trimStart').value);
     const trimE   = parseFloat(document.getElementById('trimEnd').value);
@@ -2389,7 +2389,7 @@ async function runProcess() {
         const burnMethod = document.querySelector('input[name="subsBurnMethod"]:checked').value;
         
         addLog('正在写入字幕文件…', 'ok');
-        await ffmpeg.writeFile(subsName, await fetchFile(subtitleFile));
+        await ffmpeg.writeFile(subsName, new Uint8Array(await subtitleFile.arrayBuffer()));
         
         // Reset args
         args.length = 0;
@@ -2641,7 +2641,7 @@ async function runProcess() {
         if (!overlayFile) throw new Error('请先选择 Logo / 图片文件。');
         const logoName = 'logo.' + overlayExt;
         addLog('Writing logo file\u2026', 'ok');
-        await ffmpeg.writeFile(logoName, await fetchFile(overlayFile));
+        await ffmpeg.writeFile(logoName, new Uint8Array(await overlayFile.arrayBuffer()));
         const pos   = document.getElementById('overlayPos').value;
         const pct   = parseInt(document.getElementById('overlayScale').value) || 15;
         const vidEl = document.getElementById('inputVideo');
@@ -2660,7 +2660,7 @@ async function runProcess() {
         if (!mixAudioFile) throw new Error('请先选择音乐 / 音频文件。');
         const musicName = 'music.' + mixAudioExt;
         addLog('Writing music file\u2026', 'ok');
-        await ffmpeg.writeFile(musicName, await fetchFile(mixAudioFile));
+        await ffmpeg.writeFile(musicName, new Uint8Array(await mixAudioFile.arrayBuffer()));
         const origVol  = parseFloat(document.getElementById('mixOrigVol').value).toFixed(3);
         const musicVol = parseFloat(document.getElementById('mixMusicVol').value).toFixed(3);
         ext = 'mp4';
@@ -2677,7 +2677,7 @@ async function runProcess() {
         if (!concatFile) throw new Error('请先选择要追加的第二个片段。');
         const clip2Name = 'clip2.' + concatExt;
         addLog('Writing second clip\u2026', 'ok');
-        await ffmpeg.writeFile(clip2Name, await fetchFile(concatFile));
+        await ffmpeg.writeFile(clip2Name, new Uint8Array(await concatFile.arrayBuffer()));
         ext = 'mp4';
         args.length = 0;
         if (hasTrim) args.push('-ss', trimS.toFixed(3), '-t', (trimE - trimS).toFixed(3));
@@ -2693,7 +2693,7 @@ async function runProcess() {
         if (!sxsFile) throw new Error('请先选择第二个视频文件。');
         const sxsName = 'sxs.' + sxsExt;
         addLog('正在写入第二个视频…', 'ok');
-        await ffmpeg.writeFile(sxsName, await fetchFile(sxsFile));
+        await ffmpeg.writeFile(sxsName, new Uint8Array(await sxsFile.arrayBuffer()));
         const sxsLayout = document.getElementById('sxsLayout').value;
         const sxsDim    = parseInt(document.getElementById('sxsDim').value) || 480;
         const sxsAudio  = document.getElementById('sxsAudio').value;
@@ -2716,7 +2716,7 @@ async function runProcess() {
         if (!pipFile) throw new Error('请先选择叠加视频文件。');
         const pipName = 'pip.' + pipExt;
         addLog('正在写入叠加视频…', 'ok');
-        await ffmpeg.writeFile(pipName, await fetchFile(pipFile));
+        await ffmpeg.writeFile(pipName, new Uint8Array(await pipFile.arrayBuffer()));
         const pipPos  = document.getElementById('pipPos').value;
         const pipPct  = parseInt(document.getElementById('pipScale').value) || 30;
         const pipVid  = document.getElementById('inputVideo');
@@ -2752,7 +2752,7 @@ async function runProcess() {
         if (rawInput2File) {
           const in2Name = 'input2.' + rawInput2Ext;
           addLog('Writing second input file\u2026', 'ok');
-          await ffmpeg.writeFile(in2Name, await fetchFile(rawInput2File));
+          await ffmpeg.writeFile(in2Name, new Uint8Array(await rawInput2File.arrayBuffer()));
         }
         args.push(...userArgs);
         break;
@@ -2999,7 +2999,7 @@ async function processBatchFile(item) {
 
   // Write input file
   addLog(`  Writing ${file.name}…`, 'log');
-  await ffmpeg.writeFile(inName, await fetchFile(file));
+  await ffmpeg.writeFile(inName, new Uint8Array(await file.arrayBuffer()));
 
   // Create video element to get dimensions and duration
   const vid = document.createElement('video');
@@ -4464,7 +4464,7 @@ async function runProcessStack() {
   try {
     await requestWakeLock();
     addLog('正在写入输入文件…', 'ok');
-    await ffmpeg.writeFile(inName, await fetchFile(inputFile));
+    await ffmpeg.writeFile(inName, new Uint8Array(await inputFile.arrayBuffer()));
 
     const { args, outFmt } = composeStackCommand();
     outName = 'output.' + outFmt;
@@ -4607,7 +4607,7 @@ async function processBatchStackFile(item) {
   item.outputName = baseName + '_processed.' + outExt;
 
   addLog(`  Writing ${file.name}…`, 'log');
-  await ffmpeg.writeFile(inName, await fetchFile(file));
+  await ffmpeg.writeFile(inName, new Uint8Array(await file.arrayBuffer()));
 
   // Get this file's dimensions/duration so crop/pad/fade compose correctly.
   const vid = document.createElement('video');
@@ -5078,7 +5078,7 @@ async function confirmAutoCaptionTranscript() {
       if (!inputFile) {
         throw new Error('Input file not available - original file lost');
       }
-      await ffmpeg.writeFile(inName, await fetchFile(inputFile));
+      await ffmpeg.writeFile(inName, new Uint8Array(await inputFile.arrayBuffer()));
       addLog('Input file restored successfully', 'ok');
     } catch (e) {
       console.error('Error restoring input file:', e);
